@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b5d55" />
+    <meta name="description" content="Privates Blasentagebuch für Getränke, Toilettengänge und eine übersichtliche Arztansicht." />
+    <title>Blasentagebuch</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%230b5d55'/%3E%3Cpath d='M32 12C24 23 18 30 18 39a14 14 0 0 0 28 0c0-9-6-16-14-27Z' fill='%23dff7f2'/%3E%3Cpath d='M25 41c1 5 5 7 9 7' fill='none' stroke='%230b5d55' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./app.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="./app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Zum Inhalt</a>
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">◒</span>
+        <div>
+          <h1>Blasentagebuch</h1>
+          <p id="today-label"></p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="install-button" class="icon-button hidden" type="button" title="App installieren" aria-label="App installieren">↓</button>
+        <button id="sync-button" class="sync-status" type="button" aria-label="Synchronisationsstatus öffnen">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="sync-label">Nur auf diesem Gerät</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="main" class="app-shell">
+      <section id="view-today" class="view active" data-view="today" aria-labelledby="nav-today">
+        <div class="capture-card">
+          <div class="type-switch" role="radiogroup" aria-label="Art des Eintrags">
+            <button class="type-option active" type="button" role="radio" aria-checked="true" data-kind="drink">
+              <span aria-hidden="true">＋</span> Getränk
+            </button>
+            <button class="type-option" type="button" role="radio" aria-checked="false" data-kind="urination">
+              <span aria-hidden="true">↘</span> Urinieren
+            </button>
+          </div>
+
+          <form id="entry-form" novalidate>
+            <div id="drink-preset-wrap" class="field">
+              <label for="drink-preset">Getränk</label>
+              <select id="drink-preset" name="drinkPreset"></select>
+            </div>
+            <div class="amount-row">
+              <div class="field amount-field">
+                <label for="amount">Menge</label>
+                <div class="input-suffix">
+                  <input id="amount" name="amount" type="number" min="1" max="5000" step="10" inputmode="numeric" placeholder="250" required />
+                  <span>ml</span>
+                </div>
+              </div>
+              <div class="quick-amounts" aria-label="Schnellauswahl Menge">
+                <button type="button" data-amount="150">150</button>
+                <button type="button" data-amount="250">250</button>
+                <button type="button" data-amount="500">500</button>
+              </div>
+            </div>
+            <details class="more-fields">
+              <summary>Zeit und Notiz</summary>
+              <div class="form-grid">
+                <div class="field">
+                  <label for="occurred-at">Zeitpunkt</label>
+                  <input id="occurred-at" name="occurredAt" type="datetime-local" required />
+                </div>
+                <div class="field">
+                  <label for="note">Notiz <span>(optional)</span></label>
+                  <input id="note" name="note" type="text" maxlength="160" placeholder="z. B. starker Harndrang" />
+                </div>
+              </div>
+            </details>
+            <button class="primary-button" type="submit">Eintrag speichern</button>
+            <p id="form-error" class="form-error" role="alert"></p>
+          </form>
+        </div>
+
+        <section class="summary-section" aria-labelledby="summary-heading">
+          <div class="section-heading">
+            <h2 id="summary-heading">Heute</h2>
+            <span id="today-count" class="muted"></span>
+          </div>
+          <div class="metric-grid">
+            <article class="metric metric-intake"><span>Getrunken</span><strong id="metric-intake">0 ml</strong></article>
+            <article class="metric"><span>Urin Tag</span><strong id="metric-day">0 ml</strong></article>
+            <article class="metric metric-night"><span>Urin Nacht</span><strong id="metric-night">0 ml</strong></article>
+            <article class="metric"><span>Toilettengänge</span><strong id="metric-visits">0</strong></article>
+            <article class="metric"><span>Ø Menge</span><strong id="metric-average">0 ml</strong></article>
+          </div>
+        </section>
+
+        <section class="timeline-section" aria-labelledby="timeline-heading">
+          <div class="section-heading">
+            <h2 id="timeline-heading">Einträge</h2>
+            <button id="go-all-entries" class="text-button" type="button">Alle Tage</button>
+          </div>
+          <div id="today-timeline" class="timeline"></div>
+        </section>
+      </section>
+
+      <section id="view-compare" class="view" data-view="compare" aria-labelledby="nav-compare" hidden>
+        <div class="page-heading">
+          <div><span class="eyebrow">Verlauf</span><h2>Tage vergleichen</h2></div>
+          <label class="compact-field" for="compare-days">Zeitraum
+            <select id="compare-days"><option value="7">7 Tage</option><option value="14">14 Tage</option><option value="30">30 Tage</option></select>
+          </label>
+        </div>
+        <section class="chart-card" aria-labelledby="chart-heading">
+          <div class="legend"><span><i class="legend-intake"></i> Getränk</span><span><i class="legend-output"></i> Urin</span></div>
+          <h3 id="chart-heading" class="sr-only">Mengenvergleich je Tag</h3>
+          <div id="comparison-chart" class="comparison-chart"></div>
+        </section>
+        <section class="table-card">
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Tag</th><th>Getrunken</th><th>Urin</th><th>Gänge</th><th>Ø</th></tr></thead>
+              <tbody id="comparison-table"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="view-doctor" class="view doctor-view" data-view="doctor" aria-labelledby="nav-doctor" hidden>
+        <div class="page-heading doctor-heading">
+          <div><span class="eyebrow">Übersicht</span><h2>Arztansicht</h2></div>
+          <button id="print-button" class="secondary-button" type="button">Drucken / PDF</button>
+        </div>
+        <div class="doctor-controls no-print">
+          <label>Von <input id="doctor-from" type="date" /></label>
+          <label>Bis <input id="doctor-to" type="date" /></label>
+        </div>
+        <div class="print-title">
+          <h2>Blasentagebuch</h2>
+          <p id="print-period"></p>
+        </div>
+        <div id="doctor-overview" class="doctor-overview"></div>
+        <section class="table-card doctor-table-card">
+          <h3>Tagesübersicht</h3>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Datum</th><th>Getrunken</th><th>Urin Tag</th><th>Urin Nacht</th><th>Gänge</th><th>Ø</th></tr></thead>
+              <tbody id="doctor-days"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="table-card doctor-table-card">
+          <h3>Einzelne Einträge</h3>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Datum</th><th>Zeit</th><th>Art</th><th>Details</th><th>Menge</th><th>Notiz</th></tr></thead>
+              <tbody id="doctor-entries"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="view-settings" class="view" data-view="settings" aria-labelledby="nav-settings" hidden>
+        <div class="page-heading"><div><span class="eyebrow">Konto & App</span><h2>Einstellungen</h2></div></div>
+        <section class="settings-card">
+          <h3>Synchronisation</h3>
+          <p class="settings-copy">Mit Supabase werden deine Einträge verschlüsselt übertragen und zwischen deinen Geräten synchronisiert. Der öffentliche Anon-Key darf in der App stehen; der Service-Role-Key niemals.</p>
+          <form id="auth-signed-out">
+            <div class="form-grid">
+              <div class="field"><label for="supabase-url">Supabase Projekt-URL</label><input id="supabase-url" type="url" placeholder="https://….supabase.co" autocomplete="url" /></div>
+              <div class="field"><label for="supabase-key">Öffentlicher Anon-Key</label><input id="supabase-key" type="text" placeholder="eyJ…" autocomplete="off" spellcheck="false" /></div>
+              <div class="field"><label for="auth-email">E-Mail</label><input id="auth-email" type="email" autocomplete="email" /></div>
+              <div class="field"><label for="auth-password">Passwort</label><input id="auth-password" type="password" minlength="8" autocomplete="current-password" /></div>
+            </div>
+            <div class="button-row">
+              <button id="sign-in-button" class="primary-button small" type="submit">Anmelden & synchronisieren</button>
+              <button id="sign-up-button" class="secondary-button" type="button">Konto anlegen</button>
+            </div>
+          </form>
+          <div id="auth-signed-in" hidden>
+            <p>Angemeldet als <strong id="account-email"></strong></p>
+            <div class="button-row"><button id="sync-now-button" class="primary-button small" type="button">Jetzt synchronisieren</button><button id="sign-out-button" class="secondary-button" type="button">Abmelden</button></div>
+          </div>
+          <p id="auth-message" class="inline-message" role="status"></p>
+        </section>
+
+        <section class="settings-card">
+          <h3>Standardgetränke</h3>
+          <div id="preset-list" class="preset-list"></div>
+          <form id="preset-form" class="preset-form">
+            <div class="field"><label for="preset-name">Name</label><input id="preset-name" maxlength="40" placeholder="z. B. Kräutertee" required /></div>
+            <div class="field"><label for="preset-amount">Standardmenge</label><div class="input-suffix"><input id="preset-amount" type="number" min="10" max="5000" step="10" value="250" required /><span>ml</span></div></div>
+            <button class="secondary-button" type="submit">Hinzufügen</button>
+          </form>
+        </section>
+
+        <section class="settings-card">
+          <h3>Nachtzeit</h3>
+          <p class="settings-copy">Urinmengen in diesem Zeitraum werden als Nachtmenge gezählt.</p>
+          <div class="time-settings">
+            <label>Beginn <input id="night-start" type="time" value="22:00" /></label>
+            <label>Ende <input id="night-end" type="time" value="06:00" /></label>
+          </div>
+        </section>
+
+        <section class="settings-card danger-zone">
+          <h3>Lokale Daten</h3>
+          <p class="settings-copy">Exportiere eine Sicherung oder lösche die Daten dieses Geräts. Synchronisierte Daten in Supabase bleiben beim lokalen Löschen erhalten.</p>
+          <div class="button-row"><button id="export-button" class="secondary-button" type="button">JSON exportieren</button><button id="clear-button" class="danger-button" type="button">Lokale Daten löschen</button></div>
+        </section>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Hauptnavigation">
+      <button id="nav-today" class="active" type="button" data-target="today"><span aria-hidden="true">＋</span>Heute</button>
+      <button id="nav-compare" type="button" data-target="compare"><span aria-hidden="true">▥</span>Vergleich</button>
+      <button id="nav-doctor" type="button" data-target="doctor"><span aria-hidden="true">▤</span>Arztansicht</button>
+      <button id="nav-settings" type="button" data-target="settings"><span aria-hidden="true">⚙</span>Einstellungen</button>
+    </nav>
+
+    <dialog id="edit-dialog">
+      <form id="edit-form" method="dialog">
+        <div class="dialog-heading"><h2>Eintrag bearbeiten</h2><button class="icon-button" value="cancel" aria-label="Schließen">×</button></div>
+        <input id="edit-id" type="hidden" />
+        <div class="field"><label for="edit-kind">Art</label><select id="edit-kind"><option value="drink">Getränk</option><option value="urination">Urinieren</option></select></div>
+        <div class="field"><label for="edit-name">Getränk / Details</label><input id="edit-name" maxlength="60" /></div>
+        <div class="field"><label for="edit-amount">Menge</label><div class="input-suffix"><input id="edit-amount" type="number" min="1" max="5000" required /><span>ml</span></div></div>
+        <div class="field"><label for="edit-time">Zeitpunkt</label><input id="edit-time" type="datetime-local" required /></div>
+        <div class="field"><label for="edit-note">Notiz</label><input id="edit-note" maxlength="160" /></div>
+        <div class="dialog-actions"><button class="danger-button" id="delete-entry-button" type="button">Löschen</button><button class="primary-button small" value="save">Speichern</button></div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <noscript>Diese App benötigt JavaScript.</noscript>
+  </body>
+</html>
