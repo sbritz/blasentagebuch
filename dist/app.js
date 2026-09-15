@@ -3,6 +3,7 @@
 
   const STORAGE_KEY = "blasentagebuch.state.v1";
   const CONFIG_KEY = "blasentagebuch.supabase.v1";
+  const URGENCY_MARKER = /^\[\[harndrang:(leicht|mittel|stark)\]\]\s*/i;
   const DEFAULT_PRESETS = [
     { id: "builtin-water", default_key: "builtin-water", name: "Wasser", amount_ml: 250, builtIn: true },
     { id: "builtin-coffee", default_key: "builtin-coffee", name: "Kaffee", amount_ml: 200, builtIn: true },
@@ -25,7 +26,8 @@
 
   function loadState() {
     try {
-      return { ...freshState(), ...JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") };
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      return { ...freshState(), ...saved, entries: (saved.entries || []).map(normalizeEntry) };
     } catch {
       return freshState();
     }
@@ -68,6 +70,44 @@
 
   function formatAmount(value) {
     return `${new Intl.NumberFormat("de-DE").format(Math.round(value || 0))} ml`;
+  }
+
+  function normalizeEntry(entry) {
+    if (entry.kind !== "urination") return { ...entry, urgency: null };
+    const note = String(entry.note || "");
+    const match = note.match(URGENCY_MARKER);
+    return {
+      ...entry,
+      urgency: entry.urgency || (match ? match[1].toLowerCase() : null),
+      note: match ? (note.replace(URGENCY_MARKER, "").trim() || null) : entry.note
+    };
+  }
+
+  function encodedNote(entry) {
+    const note = String(entry.note || "").trim();
+    const marker = entry.kind === "urination" && entry.urgency ? `[[harndrang:${entry.urgency}]]` : "";
+    return `${marker}${marker && note ? " " : ""}${note}`.slice(0, 160) || null;
+  }
+
+  function urgencyLabel(value) {
+    return ({ leicht: "Leicht", mittel: "Mittel", stark: "Stark" })[value] || "";
+  }
+
+  function selectedRadioValue(name) {
+    return $(`input[name="${name}"]:checked`)?.value || null;
+  }
+
+  function setRadioValue(name, value) {
+    $$(`input[name="${name}"]`).forEach((input) => { input.checked = input.value === value; });
+  }
+
+  function updateQuickAmountSelection() {
+    const amount = String(Number($("#amount").value || 0));
+    $$(".quick-amounts button").forEach((button) => {
+      const selected = amount !== "0" && button.dataset.amount === amount;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
   }
 
   function escapeHtml(value = "") {
@@ -161,13 +201,8 @@
       button.setAttribute("aria-checked", String(selected));
     });
     $("#drink-preset-wrap").hidden = kind !== "drink";
-    const amount = $("#amount");
-    if (kind === "drink") {
-      const preset = activePresets().find((item) => item.id === $("#drink-preset").value) || activePresets()[0];
-      if (!amount.value && preset) amount.value = preset.amount_ml;
-    } else if (!amount.value) {
-      amount.placeholder = "300";
-    }
+    $("#urgency-wrap").hidden = kind !== "urination";
+    $("#amount").placeholder = kind === "drink" ? "250" : "300";
     $(".primary-button[type='submit']").textContent = kind === "drink" ? "Getränk speichern" : "Toilettengang speichern";
   }
 
@@ -175,7 +210,7 @@
     const presets = activePresets();
     const select = $("#drink-preset");
     const selected = select.value;
-    select.innerHTML = presets.map((preset) => `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name)} · ${formatAmount(preset.amount_ml)}</option>`).join("")
+    select.innerHTML = presets.map((preset) => `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name)}</option>`).join("")
       + '<option value="__add__">＋ Neues Getränk hinzufügen …</option>';
     if (presets.some((preset) => preset.id === selected)) select.value = selected;
 
@@ -184,7 +219,7 @@
       const usageLabel = usageCount ? `${usageCount}× verwendet` : "Noch nicht verwendet";
       return `
       <div class="preset-item">
-        <div class="preset-copy"><strong>${escapeHtml(preset.name)} · ${formatAmount(preset.amount_ml)}</strong><span>${usageLabel}</span></div>
+        <div class="preset-copy"><strong>${escapeHtml(preset.name)}</strong><span>${usageLabel}</span></div>
         <div class="preset-actions">
           <button type="button" data-edit-preset="${escapeHtml(preset.id)}" aria-label="${escapeHtml(preset.name)} bearbeiten">Bearbeiten</button>
           <button type="button" data-delete-preset="${escapeHtml(preset.id)}" aria-label="${escapeHtml(preset.name)} löschen" ${usageCount ? `disabled title="Kann nicht gelöscht werden, weil ${escapeHtml(preset.name)} bereits verwendet wurde."` : ""}>Löschen</button>
@@ -196,7 +231,6 @@
   function resetPresetForm(focus = false) {
     $("#preset-form").reset();
     $("#preset-edit-id").value = "";
-    $("#preset-amount").value = "250";
     $("#preset-form-heading").textContent = "Neues Getränk";
     $("#preset-save-button").textContent = "Hinzufügen";
     $("#preset-cancel-button").hidden = true;
@@ -215,7 +249,6 @@
     renderPresets();
     $("#preset-edit-id").value = preset.id;
     $("#preset-name").value = preset.name;
-    $("#preset-amount").value = preset.amount_ml;
     $("#preset-form-heading").textContent = "Getränk bearbeiten";
     $("#preset-save-button").textContent = "Änderungen speichern";
     $("#preset-cancel-button").hidden = false;
@@ -261,11 +294,14 @@
     }
     timeline.innerHTML = entries.map((entry) => {
       const detail = entry.kind === "drink" ? (entry.drink_name || "Getränk") : "Toilettengang";
+      const meta = entry.kind === "urination"
+        ? [entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : "", isNight(entry.occurred_at) ? "Nachtmenge" : "", entry.note || ""].filter(Boolean).join(" · ")
+        : (entry.note || "");
       return `<article class="timeline-item">
         <time class="timeline-time">${formatDate(entry.occurred_at, { hour: "2-digit", minute: "2-digit" })}</time>
         <span class="timeline-icon ${entry.kind}" aria-hidden="true">${entry.kind === "drink" ? "+" : "↘"}</span>
-        <div class="timeline-copy"><strong>${escapeHtml(detail)}</strong><span>${escapeHtml(entry.note || (entry.kind === "urination" && isNight(entry.occurred_at) ? "Nachtmenge" : ""))}</span></div>
-        <button class="timeline-amount" type="button" data-edit-entry="${escapeHtml(entry.id)}" aria-label="${escapeHtml(detail)} bearbeiten">${formatAmount(entry.amount_ml)}</button>
+        <div class="timeline-copy"><strong>${escapeHtml(detail)}</strong><span>${escapeHtml(meta)}</span></div>
+        <div class="timeline-actions"><strong class="timeline-amount">${formatAmount(entry.amount_ml)}</strong><button class="edit-entry-button" type="button" data-edit-entry="${escapeHtml(entry.id)}" aria-label="${escapeHtml(detail)} bearbeiten"><span aria-hidden="true">✎</span> Bearbeiten</button></div>
       </article>`;
     }).join("");
   }
@@ -323,7 +359,10 @@
       const stats = statsFor(entries.filter((entry) => localDayKey(entry.occurred_at) === key));
       return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${stats.visits}</td><td>${formatAmount(stats.average)}</td></tr>`;
     }).join("");
-    $("#doctor-entries").innerHTML = entries.length ? entries.map((entry) => `<tr><td>${formatDate(entry.occurred_at, { day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatDate(entry.occurred_at, { hour: "2-digit", minute: "2-digit" })}</td><td>${entry.kind === "drink" ? "Getränk" : "Urinieren"}</td><td>${escapeHtml(entry.drink_name || "–")}</td><td>${formatAmount(entry.amount_ml)}</td><td>${escapeHtml(entry.note || "–")}</td></tr>`).join("") : '<tr><td colspan="6">Keine Einträge in diesem Zeitraum.</td></tr>';
+    $("#doctor-entries").innerHTML = entries.length ? entries.map((entry) => {
+      const details = entry.kind === "drink" ? (entry.drink_name || "–") : (entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : "–");
+      return `<tr><td>${formatDate(entry.occurred_at, { day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatDate(entry.occurred_at, { hour: "2-digit", minute: "2-digit" })}</td><td>${entry.kind === "drink" ? "Getränk" : "Urinieren"}</td><td>${escapeHtml(details)}</td><td>${formatAmount(entry.amount_ml)}</td><td>${escapeHtml(entry.note || "–")}</td></tr>`;
+    }).join("") : '<tr><td colspan="6">Keine Einträge in diesem Zeitraum.</td></tr>';
   }
 
   function renderSettings() {
@@ -370,7 +409,8 @@
       amount_ml: Math.round(amount),
       occurred_at: occurredAt.toISOString(),
       drink_name: data.kind === "drink" ? String(data.drink_name || "Getränk").trim().slice(0, 60) : null,
-      note: String(data.note || "").trim().slice(0, 160) || null,
+      urgency: data.kind === "urination" && ["leicht", "mittel", "stark"].includes(data.urgency) ? data.urgency : null,
+      note: String(data.note || "").trim().slice(0, 130) || null,
       created_at: existing?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
       deleted_at: null,
@@ -399,11 +439,19 @@
     if (!entry) return;
     $("#edit-id").value = entry.id;
     $("#edit-kind").value = entry.kind;
+    updateEditFields();
     $("#edit-name").value = entry.drink_name || "";
     $("#edit-amount").value = entry.amount_ml;
     $("#edit-time").value = nowLocalInput(new Date(entry.occurred_at));
     $("#edit-note").value = entry.note || "";
+    setRadioValue("edit-urgency", entry.urgency);
     $("#edit-dialog").showModal();
+  }
+
+  function updateEditFields() {
+    const isUrination = $("#edit-kind").value === "urination";
+    $("#edit-name-wrap").hidden = isUrination;
+    $("#edit-urgency-wrap").hidden = !isUrination;
   }
 
   function getConfig() {
@@ -457,7 +505,7 @@
       amount_ml: entry.amount_ml,
       occurred_at: entry.occurred_at,
       drink_name: entry.drink_name,
-      note: entry.note,
+      note: encodedNote(entry),
       created_at: entry.created_at,
       updated_at: entry.updated_at,
       deleted_at: entry.deleted_at
@@ -497,7 +545,7 @@
         fetchAllRows("diary_entries"),
         fetchAllRows("drink_presets")
       ]);
-      state.entries = mergeRemote(state.entries, remoteEntries);
+      state.entries = mergeRemote(state.entries, remoteEntries.map(normalizeEntry));
       state.presets = mergeRemote(state.presets, remotePresets);
 
       if (!state.defaultsMaterialized) {
@@ -576,7 +624,8 @@
             amount_ml: { type: "integer", minimum: 1, maximum: 5000 },
             occurred_at: { type: "string", description: "ISO-8601-Zeitpunkt; Standard ist jetzt." },
             drink_name: { type: "string", maxLength: 60 },
-            note: { type: "string", maxLength: 160 }
+            urgency: { type: "string", enum: ["leicht", "mittel", "stark"] },
+            note: { type: "string", maxLength: 130 }
           },
           required: ["kind", "amount_ml"],
           additionalProperties: false
@@ -605,14 +654,13 @@
 
   function bindEvents() {
     $$(".type-option").forEach((button) => button.addEventListener("click", () => setKind(button.dataset.kind)));
-    $$(".quick-amounts button").forEach((button) => button.addEventListener("click", () => { $("#amount").value = button.dataset.amount; }));
+    $$(".quick-amounts button").forEach((button) => button.addEventListener("click", () => { $("#amount").value = button.dataset.amount; updateQuickAmountSelection(); }));
+    $("#amount").addEventListener("input", updateQuickAmountSelection);
     $("#drink-preset").addEventListener("change", (event) => {
       if (event.target.value === "__add__") {
         openDrinkManagement(true);
         return;
       }
-      const preset = activePresets().find((item) => item.id === event.target.value);
-      if (preset) $("#amount").value = preset.amount_ml;
     });
     $("#manage-drinks-button").addEventListener("click", () => openDrinkManagement(false));
     $("#entry-form").addEventListener("submit", (event) => {
@@ -622,9 +670,13 @@
       try {
         const preset = activePresets().find((item) => item.id === $("#drink-preset").value);
         if (entryKind === "drink" && !preset) throw new Error("Bitte zuerst ein Getränk anlegen oder auswählen.");
-        saveEntry({ kind: entryKind, amount_ml: $("#amount").value, occurred_at: $("#occurred-at").value, drink_name: preset?.name, note: $("#note").value });
+        const urgency = selectedRadioValue("urgency");
+        if (entryKind === "urination" && !urgency) throw new Error("Bitte den Harndrang auswählen: leicht, mittel oder stark.");
+        saveEntry({ kind: entryKind, amount_ml: $("#amount").value, occurred_at: $("#occurred-at").value, drink_name: preset?.name, urgency, note: $("#note").value });
         showToast(entryKind === "drink" ? "Getränk gespeichert" : "Toilettengang gespeichert");
-        $("#amount").value = entryKind === "drink" ? (preset?.amount_ml || "") : "";
+        $("#amount").value = "";
+        updateQuickAmountSelection();
+        setRadioValue("urgency", null);
         $("#note").value = "";
         $("#occurred-at").value = nowLocalInput();
       } catch (exception) { error.textContent = exception.message; }
@@ -642,11 +694,14 @@
       if (event.submitter?.value !== "save") return;
       event.preventDefault();
       try {
-        saveEntry({ kind: $("#edit-kind").value, drink_name: $("#edit-name").value, amount_ml: $("#edit-amount").value, occurred_at: $("#edit-time").value, note: $("#edit-note").value }, $("#edit-id").value);
+        const editUrgency = selectedRadioValue("edit-urgency");
+        if ($("#edit-kind").value === "urination" && !editUrgency) throw new Error("Bitte den Harndrang auswählen: leicht, mittel oder stark.");
+        saveEntry({ kind: $("#edit-kind").value, drink_name: $("#edit-name").value, amount_ml: $("#edit-amount").value, occurred_at: $("#edit-time").value, urgency: editUrgency, note: $("#edit-note").value }, $("#edit-id").value);
         $("#edit-dialog").close();
         showToast("Eintrag aktualisiert");
       } catch (error) { showToast(error.message); }
     });
+    $("#edit-kind").addEventListener("change", updateEditFields);
     $("#delete-entry-button").addEventListener("click", () => {
       if (!window.confirm("Diesen Eintrag wirklich löschen?")) return;
       deleteEntry($("#edit-id").value);
@@ -660,10 +715,9 @@
     $("#preset-form").addEventListener("submit", (event) => {
       event.preventDefault();
       const name = $("#preset-name").value.trim();
-      const amount = Number($("#preset-amount").value);
       const editId = $("#preset-edit-id").value;
-      if (!name || amount < 10 || amount > 5000) {
-        showToast("Bitte Namen und eine Menge zwischen 10 und 5.000 ml eingeben.");
+      if (!name) {
+        showToast("Bitte einen Namen für das Getränk eingeben.");
         return;
       }
       const duplicate = activePresets().find((preset) => preset.id !== editId && normalizedName(preset.name) === normalizedName(name));
@@ -677,7 +731,6 @@
         if (!preset) return;
         const oldName = preset.name;
         preset.name = name.slice(0, 40);
-        preset.amount_ml = Math.round(amount);
         preset.updated_at = now;
         preset.dirty = true;
         state.entries.forEach((entry) => {
@@ -689,7 +742,7 @@
         });
         showToast("Getränk aktualisiert");
       } else {
-        state.presets.push({ id: uuid(), name: name.slice(0, 40), amount_ml: Math.round(amount), created_at: now, updated_at: now, deleted_at: null, dirty: true });
+        state.presets.push({ id: uuid(), name: name.slice(0, 40), amount_ml: 250, created_at: now, updated_at: now, deleted_at: null, dirty: true });
         showToast("Getränk hinzugefügt");
       }
       saveState();

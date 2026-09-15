@@ -9,9 +9,9 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%230b5d55'/%3E%3Cpath d='M32 12C24 23 18 30 18 39a14 14 0 0 0 28 0c0-9-6-16-14-27Z' fill='%23dff7f2'/%3E%3Cpath d='M25 41c1 5 5 7 9 7' fill='none' stroke='%230b5d55' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./app.css" />
+    <link rel="stylesheet" href="./app.css?v=8" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js"></script>
+    <script defer src="./app.js?v=8"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -52,18 +52,29 @@
             </div>
             <div class="amount-row">
               <div class="field amount-field">
-                <label for="amount">Menge</label>
+                <label for="amount">Eigene Menge</label>
                 <div class="input-suffix">
                   <input id="amount" name="amount" type="number" min="1" max="5000" step="10" inputmode="numeric" placeholder="250" required />
                   <span>ml</span>
                 </div>
               </div>
               <div class="quick-amounts" aria-label="Schnellauswahl Menge">
-                <button type="button" data-amount="150">150</button>
+                <button type="button" data-amount="100">100</button>
                 <button type="button" data-amount="250">250</button>
+                <button type="button" data-amount="320">320</button>
+                <button type="button" data-amount="430">430</button>
                 <button type="button" data-amount="500">500</button>
+                <button type="button" data-amount="1000">1000</button>
               </div>
             </div>
+            <fieldset id="urgency-wrap" class="choice-field" hidden>
+              <legend>Harndrang</legend>
+              <div class="urgency-options">
+                <label><input type="radio" name="urgency" value="leicht" /><span>Leicht</span></label>
+                <label><input type="radio" name="urgency" value="mittel" /><span>Mittel</span></label>
+                <label><input type="radio" name="urgency" value="stark" /><span>Stark</span></label>
+              </div>
+            </fieldset>
             <details class="more-fields">
               <summary>Zeit und Notiz</summary>
               <div class="form-grid">
@@ -73,7 +84,7 @@
                 </div>
                 <div class="field">
                   <label for="note">Notiz <span>(optional)</span></label>
-                  <input id="note" name="note" type="text" maxlength="160" placeholder="z. B. starker Harndrang" />
+                  <input id="note" name="note" type="text" maxlength="130" placeholder="z. B. nach dem Sport" />
                 </div>
               </div>
             </details>
@@ -187,13 +198,12 @@
 
         <section id="drink-settings-card" class="settings-card">
           <h3>Getränke verwalten</h3>
-          <p class="settings-copy">Name und Standardmenge können jederzeit geändert werden. Löschen ist nur möglich, solange das Getränk noch in keinem Eintrag verwendet wurde.</p>
+          <p class="settings-copy">Hier verwaltest du nur die Getränketypen. Die Menge legst du bei jedem Eintrag einzeln fest. Löschen ist nur möglich, solange das Getränk noch nicht verwendet wurde.</p>
           <div id="preset-list" class="preset-list"></div>
           <form id="preset-form" class="preset-form">
             <input id="preset-edit-id" type="hidden" />
             <h4 id="preset-form-heading">Neues Getränk</h4>
             <div class="field"><label for="preset-name">Name</label><input id="preset-name" maxlength="40" placeholder="z. B. Kräutertee" required /></div>
-            <div class="field"><label for="preset-amount">Standardmenge</label><div class="input-suffix"><input id="preset-amount" type="number" min="10" max="5000" step="10" value="250" required /><span>ml</span></div></div>
             <div class="preset-form-actions">
               <button id="preset-cancel-button" class="text-button" type="button" hidden>Abbrechen</button>
               <button id="preset-save-button" class="secondary-button" type="submit">Hinzufügen</button>
@@ -220,8 +230,8 @@
 
     <nav class="bottom-nav" aria-label="Hauptnavigation">
       <button id="nav-today" class="active" type="button" data-target="today"><span aria-hidden="true">＋</span>Heute</button>
-      <button id="nav-compare" type="button" data-target="compare"><span aria-hidden="true">▥</span>Vergleich</button>
-      <button id="nav-doctor" type="button" data-target="doctor"><span aria-hidden="true">▤</span>Arztansicht</button>
+      <button id="nav-compare" type="button" data-target="compare"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20V11h4v9M10 20V4h4v16M16 20v-7h4v7M3 20h18" /></svg></span>Vergleich</button>
+      <button id="nav-doctor" type="button" data-target="doctor"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3v5a4 4 0 0 0 8 0V3M4 3h4M12 3h4M10 12v3a5 5 0 0 0 10 0v-1" /><circle cx="20" cy="11" r="2" /></svg></span>Arztansicht</button>
       <button id="nav-settings" type="button" data-target="settings"><span aria-hidden="true">⚙</span>Einstellungen</button>
     </nav>
 
@@ -230,10 +240,18 @@
         <div class="dialog-heading"><h2>Eintrag bearbeiten</h2><button class="icon-button" value="cancel" aria-label="Schließen">×</button></div>
         <input id="edit-id" type="hidden" />
         <div class="field"><label for="edit-kind">Art</label><select id="edit-kind"><option value="drink">Getränk</option><option value="urination">Urinieren</option></select></div>
-        <div class="field"><label for="edit-name">Getränk / Details</label><input id="edit-name" maxlength="60" /></div>
+        <div id="edit-name-wrap" class="field"><label for="edit-name">Getränk</label><input id="edit-name" maxlength="60" /></div>
         <div class="field"><label for="edit-amount">Menge</label><div class="input-suffix"><input id="edit-amount" type="number" min="1" max="5000" required /><span>ml</span></div></div>
+        <fieldset id="edit-urgency-wrap" class="choice-field" hidden>
+          <legend>Harndrang</legend>
+          <div class="urgency-options">
+            <label><input type="radio" name="edit-urgency" value="leicht" /><span>Leicht</span></label>
+            <label><input type="radio" name="edit-urgency" value="mittel" /><span>Mittel</span></label>
+            <label><input type="radio" name="edit-urgency" value="stark" /><span>Stark</span></label>
+          </div>
+        </fieldset>
         <div class="field"><label for="edit-time">Zeitpunkt</label><input id="edit-time" type="datetime-local" required /></div>
-        <div class="field"><label for="edit-note">Notiz</label><input id="edit-note" maxlength="160" /></div>
+        <div class="field"><label for="edit-note">Notiz</label><input id="edit-note" maxlength="130" /></div>
         <div class="dialog-actions"><button class="danger-button" id="delete-entry-button" type="button">Löschen</button><button class="primary-button small" value="save">Speichern</button></div>
       </form>
     </dialog>

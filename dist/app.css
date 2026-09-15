@@ -129,6 +129,15 @@ input:focus, select:focus, button:focus-visible, summary:focus-visible { outline
 .amount-row { display: grid; gap: .65rem; margin-top: .75rem; }
 .quick-amounts { display: grid; grid-template-columns: repeat(3, 1fr); gap: .45rem; align-self: end; }
 .quick-amounts button { min-height: 3rem; border: 1px solid var(--line); border-radius: .7rem; background: var(--brand-soft); color: var(--brand-deep); font-weight: 700; }
+.quick-amounts button.selected { border-color: var(--brand); background: var(--brand); color: white; }
+.choice-field { min-width: 0; margin: .85rem 0 0; padding: 0; border: 0; }
+.choice-field legend { margin-bottom: .4rem; color: #344c47; font-size: .88rem; font-weight: 700; }
+.urgency-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: .45rem; }
+.urgency-options label { position: relative; cursor: pointer; }
+.urgency-options input { position: absolute; width: 1px; height: 1px; min-height: 0; opacity: 0; pointer-events: none; }
+.urgency-options span { display: grid; place-items: center; min-height: 3rem; border: 1px solid var(--line); border-radius: .7rem; background: #f6f9f8; color: var(--brand-deep); font-weight: 700; }
+.urgency-options input:checked + span { border-color: var(--brand); background: var(--brand); color: white; }
+.urgency-options input:focus-visible + span { outline: 3px solid rgba(31, 130, 115, .22); outline-offset: 2px; }
 .more-fields { margin: .75rem 0; border-top: 1px solid var(--line); }
 .more-fields summary { padding: .85rem 0 .25rem; color: var(--muted); font-size: .88rem; cursor: pointer; }
 .form-grid { display: grid; gap: .75rem; margin-top: .65rem; }
@@ -169,7 +178,10 @@ input:focus, select:focus, button:focus-visible, summary:focus-visible { outline
 .timeline-copy { min-width: 0; }
 .timeline-copy strong, .timeline-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .timeline-copy span { color: var(--muted); font-size: .8rem; }
-.timeline-amount { border: 0; background: transparent; color: var(--ink); font-weight: 800; white-space: nowrap; }
+.timeline-actions { display: flex; align-items: center; gap: .65rem; }
+.timeline-amount { color: var(--ink); font-weight: 800; white-space: nowrap; }
+.edit-entry-button { min-height: 2.4rem; padding: .4rem .65rem; border: 1px solid #afc4bf; border-radius: .6rem; background: white; color: var(--brand-deep); font-size: .8rem; font-weight: 800; white-space: nowrap; }
+.edit-entry-button:hover { background: var(--brand-soft); }
 .empty-state { padding: 2rem 1rem; text-align: center; border: 1px dashed #b9cbc6; border-radius: 1rem; color: var(--muted); background: rgba(255,255,255,.5); }
 .empty-state strong { display: block; margin-bottom: .3rem; color: var(--ink); }
 
@@ -231,6 +243,8 @@ th { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-s
 .bottom-nav { position: fixed; z-index: 25; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4, 1fr); padding: .42rem max(.4rem, env(safe-area-inset-right)) max(.42rem, env(safe-area-inset-bottom)) max(.4rem, env(safe-area-inset-left)); border-top: 1px solid var(--line); background: rgba(255,255,255,.94); backdrop-filter: blur(18px); }
 .bottom-nav button { min-height: 3.5rem; padding: .35rem .2rem; border: 0; border-radius: .65rem; background: transparent; color: var(--muted); font-size: .69rem; font-weight: 700; }
 .bottom-nav button span { display: block; height: 1.45rem; font-size: 1.12rem; }
+.bottom-nav .nav-icon { display: grid; place-items: center; }
+.bottom-nav .nav-icon svg { width: 1.35rem; height: 1.35rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .bottom-nav button.active { color: var(--brand); background: var(--brand-soft); }
 
 dialog { width: min(calc(100% - 2rem), 30rem); padding: 1rem; border: 0; border-radius: 1.2rem; box-shadow: 0 25px 80px rgba(8,33,29,.28); }
@@ -257,7 +271,12 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   .metric-grid { grid-template-columns: repeat(5, 1fr); }
   .metric:last-child { grid-column: auto; }
   .doctor-overview { grid-template-columns: repeat(4, 1fr); }
-  .preset-form { grid-template-columns: 1.25fr .8fr auto; align-items: end; }
+  .preset-form { grid-template-columns: 1fr auto; align-items: end; }
+}
+
+@media (max-width: 36rem) {
+  .timeline-item { grid-template-columns: 3.2rem 2.35rem minmax(0, 1fr); }
+  .timeline-actions { grid-column: 3 / -1; justify-content: space-between; }
 }
 
 @media (min-width: 62rem) {

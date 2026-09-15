@@ -5,7 +5,9 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 ## Enthalten
 
 - Schnellerfassung für `Getränk` und `Urinieren` mit automatischer, editierbarer Uhrzeit
-- mitgelieferte und eigene Standardgetränke, jeweils bearbeitbar
+- mitgelieferte und eigene Getränketypen, jeweils bearbeitbar
+- individuelle Mengenwahl pro Eintrag mit Schnelltasten und freiem Zahlenfeld
+- Harndrang bei jedem Toilettengang in den Stufen leicht, mittel oder stark
 - sicheres Löschen unbenutzter Getränke; verwendete Vorlagen bleiben geschützt
 - Tages-/Nachtmengen, Toilettengänge und Durchschnittsmenge
 - Vergleich für 7, 14 oder 30 Tage
