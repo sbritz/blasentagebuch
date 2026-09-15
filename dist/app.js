@@ -4,13 +4,13 @@
   const STORAGE_KEY = "blasentagebuch.state.v1";
   const CONFIG_KEY = "blasentagebuch.supabase.v1";
   const DEFAULT_PRESETS = [
-    { id: "builtin-water", name: "Wasser", amount_ml: 250, builtIn: true },
-    { id: "builtin-coffee", name: "Kaffee", amount_ml: 200, builtIn: true },
-    { id: "builtin-tea", name: "Tee", amount_ml: 250, builtIn: true },
-    { id: "builtin-juice", name: "Saft", amount_ml: 200, builtIn: true }
+    { id: "builtin-water", default_key: "builtin-water", name: "Wasser", amount_ml: 250, builtIn: true },
+    { id: "builtin-coffee", default_key: "builtin-coffee", name: "Kaffee", amount_ml: 200, builtIn: true },
+    { id: "builtin-tea", default_key: "builtin-tea", name: "Tee", amount_ml: 250, builtIn: true },
+    { id: "builtin-juice", default_key: "builtin-juice", name: "Saft", amount_ml: 200, builtIn: true }
   ];
 
-  const freshState = () => ({ entries: [], presets: [], nightStart: "22:00", nightEnd: "06:00" });
+  const freshState = () => ({ entries: [], presets: [], defaultsMaterialized: false, nightStart: "22:00", nightEnd: "06:00" });
   let state = loadState();
   let entryKind = "drink";
   let currentView = "today";
@@ -36,7 +36,12 @@
   }
 
   function uuid() {
-    return crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    if (crypto.randomUUID) return crypto.randomUUID();
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = [...bytes].map((value) => value.toString(16).padStart(2, "0"));
+    return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
   }
 
   function nowLocalInput(date = new Date()) {
@@ -74,7 +79,48 @@
   }
 
   function activePresets() {
-    return [...DEFAULT_PRESETS, ...state.presets.filter((preset) => !preset.deleted_at)];
+    const saved = state.presets.filter((preset) => !preset.deleted_at);
+    return state.defaultsMaterialized ? saved : [...DEFAULT_PRESETS, ...saved];
+  }
+
+  function normalizedName(value) {
+    return String(value || "").trim().toLocaleLowerCase("de-DE");
+  }
+
+  function materializeDefaultPresets() {
+    if (state.defaultsMaterialized) return;
+    const now = new Date().toISOString();
+    const knownNames = new Set(state.presets.map((preset) => normalizedName(preset.name)));
+    DEFAULT_PRESETS.forEach((preset) => {
+      if (knownNames.has(normalizedName(preset.name))) return;
+      state.presets.push({
+        id: uuid(),
+        default_key: preset.default_key,
+        name: preset.name,
+        amount_ml: preset.amount_ml,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+        dirty: true
+      });
+    });
+    state.defaultsMaterialized = true;
+    saveState();
+  }
+
+  function editablePreset(id) {
+    if (id.startsWith("builtin-")) {
+      const original = DEFAULT_PRESETS.find((preset) => preset.id === id);
+      materializeDefaultPresets();
+      return state.presets.find((preset) => preset.default_key === id)
+        || state.presets.find((preset) => normalizedName(preset.name) === normalizedName(original?.name));
+    }
+    return state.presets.find((preset) => preset.id === id);
+  }
+
+  function presetUsageCount(preset) {
+    const name = normalizedName(preset?.name);
+    return activeEntries().filter((entry) => entry.kind === "drink" && normalizedName(entry.drink_name) === name).length;
   }
 
   function isNight(value) {
@@ -129,14 +175,73 @@
     const presets = activePresets();
     const select = $("#drink-preset");
     const selected = select.value;
-    select.innerHTML = presets.map((preset) => `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name)} · ${formatAmount(preset.amount_ml)}</option>`).join("");
+    select.innerHTML = presets.map((preset) => `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name)} · ${formatAmount(preset.amount_ml)}</option>`).join("")
+      + '<option value="__add__">＋ Neues Getränk hinzufügen …</option>';
     if (presets.some((preset) => preset.id === selected)) select.value = selected;
 
-    $("#preset-list").innerHTML = presets.map((preset) => `
+    $("#preset-list").innerHTML = presets.map((preset) => {
+      const usageCount = presetUsageCount(preset);
+      const usageLabel = usageCount ? `${usageCount}× verwendet` : "Noch nicht verwendet";
+      return `
       <div class="preset-item">
-        <div><strong>${escapeHtml(preset.name)}</strong> <span>${formatAmount(preset.amount_ml)}</span></div>
-        ${preset.builtIn ? "<span>Mitgeliefert</span>" : `<button type="button" data-delete-preset="${escapeHtml(preset.id)}" aria-label="${escapeHtml(preset.name)} entfernen">Entfernen</button>`}
-      </div>`).join("");
+        <div class="preset-copy"><strong>${escapeHtml(preset.name)} · ${formatAmount(preset.amount_ml)}</strong><span>${usageLabel}</span></div>
+        <div class="preset-actions">
+          <button type="button" data-edit-preset="${escapeHtml(preset.id)}" aria-label="${escapeHtml(preset.name)} bearbeiten">Bearbeiten</button>
+          <button type="button" data-delete-preset="${escapeHtml(preset.id)}" aria-label="${escapeHtml(preset.name)} löschen" ${usageCount ? `disabled title="Kann nicht gelöscht werden, weil ${escapeHtml(preset.name)} bereits verwendet wurde."` : ""}>Löschen</button>
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  function resetPresetForm(focus = false) {
+    $("#preset-form").reset();
+    $("#preset-edit-id").value = "";
+    $("#preset-amount").value = "250";
+    $("#preset-form-heading").textContent = "Neues Getränk";
+    $("#preset-save-button").textContent = "Hinzufügen";
+    $("#preset-cancel-button").hidden = true;
+    if (focus) $("#preset-name").focus();
+  }
+
+  function openDrinkManagement(createNew = false) {
+    navigate("settings");
+    $("#drink-settings-card").scrollIntoView({ behavior: "smooth", block: "start" });
+    if (createNew) resetPresetForm(true);
+  }
+
+  function beginPresetEdit(id) {
+    const preset = editablePreset(id);
+    if (!preset || preset.deleted_at) return;
+    renderPresets();
+    $("#preset-edit-id").value = preset.id;
+    $("#preset-name").value = preset.name;
+    $("#preset-amount").value = preset.amount_ml;
+    $("#preset-form-heading").textContent = "Getränk bearbeiten";
+    $("#preset-save-button").textContent = "Änderungen speichern";
+    $("#preset-cancel-button").hidden = false;
+    $("#preset-name").focus();
+  }
+
+  function deletePreset(id) {
+    const visiblePreset = activePresets().find((preset) => preset.id === id);
+    if (!visiblePreset) return;
+    const usageCount = presetUsageCount(visiblePreset);
+    if (usageCount) {
+      showToast(`${visiblePreset.name} kann nicht gelöscht werden, weil es bereits verwendet wurde.`);
+      return;
+    }
+    if (!window.confirm(`${visiblePreset.name} wirklich löschen?`)) return;
+    const preset = editablePreset(id);
+    if (!preset) return;
+    const now = new Date().toISOString();
+    preset.deleted_at = now;
+    preset.updated_at = now;
+    preset.dirty = true;
+    saveState();
+    resetPresetForm();
+    renderPresets();
+    void syncData();
+    showToast("Getränk gelöscht");
   }
 
   function renderToday() {
@@ -367,7 +472,7 @@
     const map = new Map(localItems.map((item) => [item.id, item]));
     remoteItems.forEach((remote) => {
       const local = map.get(remote.id);
-      if (!local || (!local.dirty && new Date(remote.updated_at) >= new Date(local.updated_at))) map.set(remote.id, { ...remote, dirty: false });
+      if (!local || (!local.dirty && new Date(remote.updated_at) >= new Date(local.updated_at))) map.set(remote.id, { ...local, ...remote, dirty: false });
     });
     return [...map.values()];
   }
@@ -388,6 +493,21 @@
     syncInProgress = true;
     setSyncStatus("syncing", "Synchronisiere …");
     try {
+      const [remoteEntries, remotePresets] = await Promise.all([
+        fetchAllRows("diary_entries"),
+        fetchAllRows("drink_presets")
+      ]);
+      state.entries = mergeRemote(state.entries, remoteEntries);
+      state.presets = mergeRemote(state.presets, remotePresets);
+
+      if (!state.defaultsMaterialized) {
+        if (remotePresets.length >= DEFAULT_PRESETS.length) {
+          state.defaultsMaterialized = true;
+        } else {
+          materializeDefaultPresets();
+        }
+      }
+
       const dirtyEntries = state.entries.filter((entry) => entry.dirty);
       if (dirtyEntries.length) {
         const { error } = await supabaseClient.from("diary_entries").upsert(dirtyEntries.map(remoteEntry));
@@ -400,12 +520,6 @@
         if (error) throw error;
         dirtyPresets.forEach((preset) => { preset.dirty = false; });
       }
-      const [remoteEntries, remotePresets] = await Promise.all([
-        fetchAllRows("diary_entries"),
-        fetchAllRows("drink_presets")
-      ]);
-      state.entries = mergeRemote(state.entries, remoteEntries);
-      state.presets = mergeRemote(state.presets, remotePresets);
       saveState();
       renderAll();
       setSyncStatus("online", "Synchronisiert");
@@ -425,7 +539,7 @@
     const password = $("#auth-password").value;
     const message = $("#auth-message");
     if (!url || !key || !email || password.length < 8) {
-      message.textContent = "Bitte Projekt-URL, Anon-Key, E-Mail und mindestens 8 Passwortzeichen eingeben.";
+      message.textContent = "Bitte Projekt-URL, Publishable Key, E-Mail und mindestens 8 Passwortzeichen eingeben.";
       return;
     }
     localStorage.setItem(CONFIG_KEY, JSON.stringify({ url, key }));
@@ -493,15 +607,21 @@
     $$(".type-option").forEach((button) => button.addEventListener("click", () => setKind(button.dataset.kind)));
     $$(".quick-amounts button").forEach((button) => button.addEventListener("click", () => { $("#amount").value = button.dataset.amount; }));
     $("#drink-preset").addEventListener("change", (event) => {
+      if (event.target.value === "__add__") {
+        openDrinkManagement(true);
+        return;
+      }
       const preset = activePresets().find((item) => item.id === event.target.value);
       if (preset) $("#amount").value = preset.amount_ml;
     });
+    $("#manage-drinks-button").addEventListener("click", () => openDrinkManagement(false));
     $("#entry-form").addEventListener("submit", (event) => {
       event.preventDefault();
       const error = $("#form-error");
       error.textContent = "";
       try {
         const preset = activePresets().find((item) => item.id === $("#drink-preset").value);
+        if (entryKind === "drink" && !preset) throw new Error("Bitte zuerst ein Getränk anlegen oder auswählen.");
         saveEntry({ kind: entryKind, amount_ml: $("#amount").value, occurred_at: $("#occurred-at").value, drink_name: preset?.name, note: $("#note").value });
         showToast(entryKind === "drink" ? "Getränk gespeichert" : "Toilettengang gespeichert");
         $("#amount").value = entryKind === "drink" ? (preset?.amount_ml || "") : "";
@@ -541,19 +661,49 @@
       event.preventDefault();
       const name = $("#preset-name").value.trim();
       const amount = Number($("#preset-amount").value);
-      if (!name || amount < 10 || amount > 5000) return;
+      const editId = $("#preset-edit-id").value;
+      if (!name || amount < 10 || amount > 5000) {
+        showToast("Bitte Namen und eine Menge zwischen 10 und 5.000 ml eingeben.");
+        return;
+      }
+      const duplicate = activePresets().find((preset) => preset.id !== editId && normalizedName(preset.name) === normalizedName(name));
+      if (duplicate) {
+        showToast("Ein Getränk mit diesem Namen gibt es bereits.");
+        return;
+      }
       const now = new Date().toISOString();
-      state.presets.push({ id: uuid(), name: name.slice(0, 40), amount_ml: Math.round(amount), created_at: now, updated_at: now, deleted_at: null, dirty: true });
-      saveState(); renderPresets(); void syncData();
-      event.target.reset(); $("#preset-amount").value = "250";
-      showToast("Standardgetränk hinzugefügt");
+      if (editId) {
+        const preset = state.presets.find((item) => item.id === editId);
+        if (!preset) return;
+        const oldName = preset.name;
+        preset.name = name.slice(0, 40);
+        preset.amount_ml = Math.round(amount);
+        preset.updated_at = now;
+        preset.dirty = true;
+        state.entries.forEach((entry) => {
+          if (!entry.deleted_at && entry.kind === "drink" && normalizedName(entry.drink_name) === normalizedName(oldName)) {
+            entry.drink_name = preset.name;
+            entry.updated_at = now;
+            entry.dirty = true;
+          }
+        });
+        showToast("Getränk aktualisiert");
+      } else {
+        state.presets.push({ id: uuid(), name: name.slice(0, 40), amount_ml: Math.round(amount), created_at: now, updated_at: now, deleted_at: null, dirty: true });
+        showToast("Getränk hinzugefügt");
+      }
+      saveState();
+      resetPresetForm();
+      renderAll();
+      void syncData();
     });
     $("#preset-list").addEventListener("click", (event) => {
-      const button = event.target.closest("[data-delete-preset]");
-      if (!button) return;
-      const preset = state.presets.find((item) => item.id === button.dataset.deletePreset);
-      if (preset) { preset.deleted_at = new Date().toISOString(); preset.updated_at = preset.deleted_at; preset.dirty = true; saveState(); renderPresets(); void syncData(); }
+      const editButton = event.target.closest("[data-edit-preset]");
+      if (editButton) { beginPresetEdit(editButton.dataset.editPreset); return; }
+      const deleteButton = event.target.closest("[data-delete-preset]");
+      if (deleteButton) deletePreset(deleteButton.dataset.deletePreset);
     });
+    $("#preset-cancel-button").addEventListener("click", () => resetPresetForm());
     $("#auth-signed-out").addEventListener("submit", (event) => { event.preventDefault(); void signIn(false); });
     $("#sign-up-button").addEventListener("click", () => void signIn(true));
     $("#sync-now-button").addEventListener("click", () => void syncData());

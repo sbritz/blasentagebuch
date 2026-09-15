@@ -48,6 +48,7 @@
             <div id="drink-preset-wrap" class="field">
               <label for="drink-preset">Getränk</label>
               <select id="drink-preset" name="drinkPreset"></select>
+              <button id="manage-drinks-button" class="manage-drinks-button" type="button">＋ Getränke verwalten</button>
             </div>
             <div class="amount-row">
               <div class="field amount-field">
@@ -164,11 +165,11 @@
         <div class="page-heading"><div><span class="eyebrow">Konto & App</span><h2>Einstellungen</h2></div></div>
         <section class="settings-card">
           <h3>Synchronisation</h3>
-          <p class="settings-copy">Mit Supabase werden deine Einträge verschlüsselt übertragen und zwischen deinen Geräten synchronisiert. Der öffentliche Anon-Key darf in der App stehen; der Service-Role-Key niemals.</p>
+          <p class="settings-copy">Mit Supabase werden deine Einträge verschlüsselt übertragen und zwischen deinen Geräten synchronisiert. Der öffentliche Publishable Key darf in der App stehen; ein Secret Key niemals.</p>
           <form id="auth-signed-out">
             <div class="form-grid">
               <div class="field"><label for="supabase-url">Supabase Projekt-URL</label><input id="supabase-url" type="url" placeholder="https://….supabase.co" autocomplete="url" /></div>
-              <div class="field"><label for="supabase-key">Öffentlicher Anon-Key</label><input id="supabase-key" type="text" placeholder="eyJ…" autocomplete="off" spellcheck="false" /></div>
+              <div class="field"><label for="supabase-key">Öffentlicher Publishable Key</label><input id="supabase-key" type="text" placeholder="sb_publishable_…" autocomplete="off" spellcheck="false" /></div>
               <div class="field"><label for="auth-email">E-Mail</label><input id="auth-email" type="email" autocomplete="email" /></div>
               <div class="field"><label for="auth-password">Passwort</label><input id="auth-password" type="password" minlength="8" autocomplete="current-password" /></div>
             </div>
@@ -184,13 +185,19 @@
           <p id="auth-message" class="inline-message" role="status"></p>
         </section>
 
-        <section class="settings-card">
-          <h3>Standardgetränke</h3>
+        <section id="drink-settings-card" class="settings-card">
+          <h3>Getränke verwalten</h3>
+          <p class="settings-copy">Name und Standardmenge können jederzeit geändert werden. Löschen ist nur möglich, solange das Getränk noch in keinem Eintrag verwendet wurde.</p>
           <div id="preset-list" class="preset-list"></div>
           <form id="preset-form" class="preset-form">
+            <input id="preset-edit-id" type="hidden" />
+            <h4 id="preset-form-heading">Neues Getränk</h4>
             <div class="field"><label for="preset-name">Name</label><input id="preset-name" maxlength="40" placeholder="z. B. Kräutertee" required /></div>
             <div class="field"><label for="preset-amount">Standardmenge</label><div class="input-suffix"><input id="preset-amount" type="number" min="10" max="5000" step="10" value="250" required /><span>ml</span></div></div>
-            <button class="secondary-button" type="submit">Hinzufügen</button>
+            <div class="preset-form-actions">
+              <button id="preset-cancel-button" class="text-button" type="button" hidden>Abbrechen</button>
+              <button id="preset-save-button" class="secondary-button" type="submit">Hinzufügen</button>
+            </div>
           </form>
         </section>
 

@@ -5,7 +5,8 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 ## Enthalten
 
 - Schnellerfassung für `Getränk` und `Urinieren` mit automatischer, editierbarer Uhrzeit
-- mitgelieferte und eigene Standardgetränke
+- mitgelieferte und eigene Standardgetränke, jeweils bearbeitbar
+- sicheres Löschen unbenutzter Getränke; verwendete Vorlagen bleiben geschützt
 - Tages-/Nachtmengen, Toilettengänge und Durchschnittsmenge
 - Vergleich für 7, 14 oder 30 Tage
 - Bearbeiten und Löschen mit synchronisierten Löschmarkierungen
@@ -29,10 +30,10 @@ Danach `http://localhost:4173` aufrufen. Ohne Supabase bleiben die Daten ausschl
 1. Ein neues Supabase-Projekt erstellen.
 2. Den Inhalt von `supabase/schema.sql` im Supabase SQL Editor ausführen.
 3. Unter **Authentication → Providers** E-Mail/Passwort aktivieren. Für ein privates Ein-Personen-Tagebuch kann die öffentliche Registrierung nach dem ersten Konto wieder deaktiviert werden.
-4. Die **Project URL** und den öffentlichen **anon/publishable key** aus den API-Einstellungen kopieren.
+4. Die **Project URL** und den öffentlichen **Publishable Key** aus den API-Einstellungen kopieren.
 5. In der App unter **Einstellungen → Synchronisation** beides zusammen mit E-Mail und Passwort eintragen.
 
-Der öffentliche Browser-Key ist kein Geheimnis. Der Schutz entsteht durch Authentifizierung und die RLS-Regeln in `schema.sql`. Einen `service_role`-Key niemals in die App oder in GitHub kopieren.
+Der öffentliche Browser-Key ist kein Geheimnis. Der Schutz entsteht durch Authentifizierung und die RLS-Regeln in `schema.sql`. Einen Secret- oder `service_role`-Key niemals in die App oder in GitHub kopieren.
 
 ## Auf GitHub Pages veröffentlichen
 

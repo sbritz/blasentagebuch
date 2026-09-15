@@ -1,4 +1,4 @@
-const CACHE = "blasentagebuch-v5";
+const CACHE = "blasentagebuch-v7";
 const APP_SHELL = ["./", "./index.html", "./app.css", "./app.js", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
