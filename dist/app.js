@@ -52,6 +52,18 @@
     return shifted.toISOString().slice(0, 16);
   }
 
+  function setSplitDateTime(dateSelector, timeSelector, date = new Date()) {
+    const value = nowLocalInput(date);
+    $(dateSelector).value = value.slice(0, 10);
+    $(timeSelector).value = value.slice(11, 16);
+  }
+
+  function combinedDateTime(dateSelector, timeSelector) {
+    const date = $(dateSelector).value;
+    const time = $(timeSelector).value;
+    return date && time ? `${date}T${time}` : "";
+  }
+
   function resolvedTheme(mode = state.themeMode) {
     if (mode === "dark" || mode === "light") return mode;
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -79,9 +91,9 @@
   }
 
   function updateEntryTimeSummary() {
-    const input = $("#occurred-at");
-    if (!input?.value) return;
-    const date = new Date(input.value);
+    const value = combinedDateTime("#occurred-date", "#occurred-time");
+    if (!value) return;
+    const date = new Date(value);
     if (Number.isNaN(date.getTime())) return;
     const time = formatDate(date, { hour: "2-digit", minute: "2-digit" });
     const differentDay = localDayKey(date) !== localDayKey(new Date());
@@ -91,7 +103,7 @@
 
   function refreshCurrentEntryTime(force = false) {
     if (occurredAtManuallySet && !force) return;
-    $("#occurred-at").value = nowLocalInput();
+    setSplitDateTime("#occurred-date", "#occurred-time");
     occurredAtManuallySet = false;
     $("#use-current-time").hidden = true;
     updateEntryTimeSummary();
@@ -491,7 +503,7 @@
     updateEditFields();
     $("#edit-name").value = entry.drink_name || "";
     $("#edit-amount").value = entry.amount_ml;
-    $("#edit-time").value = nowLocalInput(new Date(entry.occurred_at));
+    setSplitDateTime("#edit-date", "#edit-time", new Date(entry.occurred_at));
     $("#edit-note").value = entry.note || "";
     setRadioValue("edit-urgency", entry.urgency);
     $("#edit-dialog").showModal();
@@ -712,11 +724,11 @@
       }
     });
     $("#manage-drinks-button").addEventListener("click", () => openDrinkManagement(false));
-    $("#occurred-at").addEventListener("input", () => {
+    ["#occurred-date", "#occurred-time"].forEach((selector) => $(selector).addEventListener("input", () => {
       occurredAtManuallySet = true;
       $("#use-current-time").hidden = false;
       updateEntryTimeSummary();
-    });
+    }));
     $("#use-current-time").addEventListener("click", () => refreshCurrentEntryTime(true));
     $("#entry-form").addEventListener("submit", (event) => {
       event.preventDefault();
@@ -728,7 +740,7 @@
         if (entryKind === "drink" && !preset) throw new Error("Bitte zuerst ein Getränk anlegen oder auswählen.");
         const urgency = selectedRadioValue("urgency");
         if (entryKind === "urination" && !urgency) throw new Error("Bitte den Harndrang auswählen: leicht, mittel oder stark.");
-        saveEntry({ kind: entryKind, amount_ml: $("#amount").value, occurred_at: $("#occurred-at").value, drink_name: preset?.name, urgency, note: $("#note").value });
+        saveEntry({ kind: entryKind, amount_ml: $("#amount").value, occurred_at: combinedDateTime("#occurred-date", "#occurred-time"), drink_name: preset?.name, urgency, note: $("#note").value });
         showToast(entryKind === "drink" ? "Getränk gespeichert" : "Toilettengang gespeichert");
         $("#amount").value = "";
         updateQuickAmountSelection();
@@ -752,7 +764,7 @@
       try {
         const editUrgency = selectedRadioValue("edit-urgency");
         if ($("#edit-kind").value === "urination" && !editUrgency) throw new Error("Bitte den Harndrang auswählen: leicht, mittel oder stark.");
-        saveEntry({ kind: $("#edit-kind").value, drink_name: $("#edit-name").value, amount_ml: $("#edit-amount").value, occurred_at: $("#edit-time").value, urgency: editUrgency, note: $("#edit-note").value }, $("#edit-id").value);
+        saveEntry({ kind: $("#edit-kind").value, drink_name: $("#edit-name").value, amount_ml: $("#edit-amount").value, occurred_at: combinedDateTime("#edit-date", "#edit-time"), urgency: editUrgency, note: $("#edit-note").value }, $("#edit-id").value);
         $("#edit-dialog").close();
         showToast("Eintrag aktualisiert");
       } catch (error) { showToast(error.message); }

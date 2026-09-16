@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=9" />
+    <link rel="stylesheet" href="./app.css?v=10" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=9"></script>
+    <script defer src="./app.js?v=10"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -93,8 +93,11 @@
               <summary><span>Zeitpunkt & Notiz</span><strong id="entry-time-summary">Jetzt</strong></summary>
               <div class="form-grid">
                 <div class="field">
-                  <div class="field-label-row"><label for="occurred-at">Zeitpunkt</label><button id="use-current-time" class="inline-action" type="button" hidden>Aktuelle Zeit verwenden</button></div>
-                  <input id="occurred-at" name="occurredAt" type="datetime-local" required />
+                  <div class="field-label-row"><span class="control-label">Zeitpunkt</span><button id="use-current-time" class="inline-action" type="button" hidden>Aktuelle Zeit verwenden</button></div>
+                  <div class="date-time-fields">
+                    <label class="date-time-field" for="occurred-date"><span>Datum</span><input id="occurred-date" name="occurredDate" type="date" required /></label>
+                    <label class="date-time-field" for="occurred-time"><span>Uhrzeit</span><input id="occurred-time" name="occurredTime" type="time" step="60" required /></label>
+                  </div>
                 </div>
                 <div class="field">
                   <label for="note">Notiz <span>(optional)</span></label>
@@ -273,7 +276,13 @@
             <label><input type="radio" name="edit-urgency" value="stark" /><span>Stark</span></label>
           </div>
         </fieldset>
-        <div class="field"><label for="edit-time">Zeitpunkt</label><input id="edit-time" type="datetime-local" required /></div>
+        <div class="field">
+          <span class="control-label">Zeitpunkt</span>
+          <div class="date-time-fields">
+            <label class="date-time-field" for="edit-date"><span>Datum</span><input id="edit-date" type="date" required /></label>
+            <label class="date-time-field" for="edit-time"><span>Uhrzeit</span><input id="edit-time" type="time" step="60" required /></label>
+          </div>
+        </div>
         <div class="field"><label for="edit-note">Notiz</label><input id="edit-note" maxlength="130" /></div>
         <div class="dialog-actions"><button class="danger-button" id="delete-entry-button" type="button">Löschen</button><button class="primary-button small" value="save">Speichern</button></div>
       </form>
