@@ -151,8 +151,9 @@ button, select { cursor: pointer; }
 .field label span { color: var(--muted); font-weight: 500; }
 .field-label-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 .inline-action { padding: .15rem 0; border: 0; background: transparent; color: var(--brand); font-size: .78rem; font-weight: 750; }
-.date-time-fields { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, .85fr); gap: .55rem; min-width: 0; }
+.date-time-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: .65rem; min-width: 0; width: 100%; }
 .date-time-field { display: flex; flex-direction: column; gap: .32rem; min-width: 0; color: var(--muted); font-size: .76rem; font-weight: 650; }
+.date-time-field, .date-time-field input { width: 100%; }
 .date-time-field input { min-width: 0; max-width: 100%; }
 input, select {
   width: 100%;
@@ -326,6 +327,7 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   .app-header { padding-inline: 2rem; }
   .app-shell { padding: 1.5rem 2rem 7rem; }
   .capture-card { padding: 1.35rem; }
+  .date-time-fields { grid-template-columns: minmax(0, 1.25fr) minmax(0, .85fr); gap: .55rem; }
   .amount-row { grid-template-columns: 1fr 1.45fr; }
   .form-grid { grid-template-columns: 1fr 1fr; }
   .metric-grid { grid-template-columns: repeat(5, 1fr); }
