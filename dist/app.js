@@ -11,7 +11,7 @@
     { id: "builtin-juice", default_key: "builtin-juice", name: "Saft", amount_ml: 200, builtIn: true }
   ];
 
-  const freshState = () => ({ entries: [], presets: [], defaultsMaterialized: false, nightStart: "22:00", nightEnd: "06:00" });
+  const freshState = () => ({ entries: [], presets: [], defaultsMaterialized: false, nightStart: "22:00", nightEnd: "06:00", themeMode: "auto" });
   let state = loadState();
   let entryKind = "drink";
   let currentView = "today";
@@ -20,6 +20,7 @@
   let syncInProgress = false;
   let installPrompt = null;
   let toastTimer = null;
+  let occurredAtManuallySet = false;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -49,6 +50,51 @@
   function nowLocalInput(date = new Date()) {
     const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
     return shifted.toISOString().slice(0, 16);
+  }
+
+  function resolvedTheme(mode = state.themeMode) {
+    if (mode === "dark" || mode === "light") return mode;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function applyTheme() {
+    if (!["auto", "light", "dark"].includes(state.themeMode)) state.themeMode = "auto";
+    const theme = resolvedTheme();
+    document.documentElement.dataset.colorScheme = theme;
+    $("#theme-color-meta").content = theme === "dark" ? "#0b1312" : "#eef5f3";
+    $("#theme-icon").textContent = theme === "dark" ? "☀︎" : "☾";
+    $("#theme-toggle").setAttribute("aria-label", theme === "dark" ? "Helles Design einschalten" : "Dunkles Design einschalten");
+    $("#theme-toggle").title = theme === "dark" ? "Helles Design einschalten" : "Dunkles Design einschalten";
+    $$('[data-theme-mode]').forEach((button) => {
+      const active = button.dataset.themeMode === state.themeMode;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+  }
+
+  function setThemeMode(mode) {
+    state.themeMode = ["auto", "light", "dark"].includes(mode) ? mode : "auto";
+    saveState();
+    applyTheme();
+  }
+
+  function updateEntryTimeSummary() {
+    const input = $("#occurred-at");
+    if (!input?.value) return;
+    const date = new Date(input.value);
+    if (Number.isNaN(date.getTime())) return;
+    const time = formatDate(date, { hour: "2-digit", minute: "2-digit" });
+    const differentDay = localDayKey(date) !== localDayKey(new Date());
+    const datePart = differentDay ? `${formatDate(date, { day: "2-digit", month: "2-digit" })} · ` : "";
+    $("#entry-time-summary").textContent = `${occurredAtManuallySet ? "Geändert" : "Jetzt"} · ${datePart}${time} Uhr`;
+  }
+
+  function refreshCurrentEntryTime(force = false) {
+    if (occurredAtManuallySet && !force) return;
+    $("#occurred-at").value = nowLocalInput();
+    occurredAtManuallySet = false;
+    $("#use-current-time").hidden = true;
+    updateEntryTimeSummary();
   }
 
   function localDayKey(value) {
@@ -204,6 +250,7 @@
     $("#urgency-wrap").hidden = kind !== "urination";
     $("#amount").placeholder = kind === "drink" ? "250" : "300";
     $(".primary-button[type='submit']").textContent = kind === "drink" ? "Getränk speichern" : "Toilettengang speichern";
+    refreshCurrentEntryTime();
   }
 
   function renderPresets() {
@@ -370,6 +417,7 @@
     $("#night-end").value = state.nightEnd;
     renderPresets();
     updateAuthUi();
+    applyTheme();
   }
 
   function renderAll() {
@@ -394,6 +442,7 @@
     if (target === "compare") renderComparison();
     if (target === "doctor") renderDoctor();
     if (target === "settings") renderSettings();
+    if (target === "today") refreshCurrentEntryTime();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -663,11 +712,18 @@
       }
     });
     $("#manage-drinks-button").addEventListener("click", () => openDrinkManagement(false));
+    $("#occurred-at").addEventListener("input", () => {
+      occurredAtManuallySet = true;
+      $("#use-current-time").hidden = false;
+      updateEntryTimeSummary();
+    });
+    $("#use-current-time").addEventListener("click", () => refreshCurrentEntryTime(true));
     $("#entry-form").addEventListener("submit", (event) => {
       event.preventDefault();
       const error = $("#form-error");
       error.textContent = "";
       try {
+        refreshCurrentEntryTime();
         const preset = activePresets().find((item) => item.id === $("#drink-preset").value);
         if (entryKind === "drink" && !preset) throw new Error("Bitte zuerst ein Getränk anlegen oder auswählen.");
         const urgency = selectedRadioValue("urgency");
@@ -678,7 +734,7 @@
         updateQuickAmountSelection();
         setRadioValue("urgency", null);
         $("#note").value = "";
-        $("#occurred-at").value = nowLocalInput();
+        refreshCurrentEntryTime(true);
       } catch (exception) { error.textContent = exception.message; }
     });
     $$(".bottom-nav button").forEach((button) => button.addEventListener("click", () => navigate(button.dataset.target)));
@@ -712,6 +768,8 @@
     $("#print-button").addEventListener("click", () => window.print());
     $("#night-start").addEventListener("change", (event) => { state.nightStart = event.target.value; saveState(); renderAll(); });
     $("#night-end").addEventListener("change", (event) => { state.nightEnd = event.target.value; saveState(); renderAll(); });
+    $$('[data-theme-mode]').forEach((button) => button.addEventListener("click", () => setThemeMode(button.dataset.themeMode)));
+    $("#theme-toggle").addEventListener("click", () => setThemeMode(resolvedTheme() === "dark" ? "light" : "dark"));
     $("#preset-form").addEventListener("submit", (event) => {
       event.preventDefault();
       const name = $("#preset-name").value.trim();
@@ -769,17 +827,30 @@
     });
     $("#clear-button").addEventListener("click", () => {
       if (!window.confirm("Alle lokalen Einträge und eigenen Standardgetränke auf diesem Gerät löschen?")) return;
-      state = freshState(); saveState(); renderAll(); showToast("Lokale Daten gelöscht");
+      state = freshState();
+      occurredAtManuallySet = false;
+      saveState();
+      applyTheme();
+      refreshCurrentEntryTime(true);
+      renderAll();
+      showToast("Lokale Daten gelöscht");
     });
     window.addEventListener("online", () => void syncData());
     window.addEventListener("offline", () => setSyncStatus("", "Offline – lokal gespeichert"));
+    window.addEventListener("focus", () => refreshCurrentEntryTime());
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshCurrentEntryTime(); });
+    const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleSystemThemeChange = () => { if (state.themeMode === "auto") applyTheme(); };
+    if (themeMedia.addEventListener) themeMedia.addEventListener("change", handleSystemThemeChange);
+    else themeMedia.addListener(handleSystemThemeChange);
     window.addEventListener("beforeinstallprompt", (event) => { event.preventDefault(); installPrompt = event; $("#install-button").classList.remove("hidden"); });
     $("#install-button").addEventListener("click", async () => { if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $("#install-button").classList.add("hidden"); });
   }
 
   async function init() {
+    applyTheme();
     $("#today-label").textContent = formatDate(new Date(), { weekday: "long", day: "2-digit", month: "long" });
-    $("#occurred-at").value = nowLocalInput();
+    refreshCurrentEntryTime(true);
     const today = new Date();
     const from = new Date(today); from.setDate(today.getDate() - 6);
     $("#doctor-from").value = localDayKey(from);
@@ -788,6 +859,7 @@
     setKind("drink");
     bindEvents();
     renderAll();
+    window.setInterval(() => { if (document.visibilityState === "visible") refreshCurrentEntryTime(); }, 15000);
     registerWebMcpTools();
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(console.error);
     try { await initSupabase(); if (currentUser) await syncData(); } catch (error) { console.error(error); setSyncStatus("error", "Sync nicht verfügbar"); }

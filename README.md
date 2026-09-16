@@ -5,6 +5,7 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 ## Enthalten
 
 - Schnellerfassung für `Getränk` und `Urinieren` mit automatischer, editierbarer Uhrzeit
+- laufend aktualisierte Uhrzeit, solange sie für den aktuellen Eintrag nicht manuell geändert wurde
 - mitgelieferte und eigene Getränketypen, jeweils bearbeitbar
 - individuelle Mengenwahl pro Eintrag mit Schnelltasten und freiem Zahlenfeld
 - Harndrang bei jedem Toilettengang in den Stufen leicht, mittel oder stark
@@ -14,6 +15,7 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 - Bearbeiten und Löschen mit synchronisierten Löschmarkierungen
 - druckoptimierte Arztansicht für einen frei wählbaren Zeitraum
 - offlinefähige PWA und installierbare App-Oberfläche
+- automatischer sowie manuell wählbarer Hell-/Dunkelmodus
 - Supabase Auth, PostgreSQL und Row Level Security
 - automatisches GitHub-Pages-Deployment
 
