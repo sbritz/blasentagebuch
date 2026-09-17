@@ -24,6 +24,14 @@ create table if not exists public.drink_presets (
   deleted_at timestamptz
 );
 
+create table if not exists public.user_settings (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  night_start time not null default '22:00',
+  night_end time not null default '06:00',
+  updated_at timestamptz not null default now(),
+  constraint user_settings_night_period_check check (night_start <> night_end)
+);
+
 create index if not exists diary_entries_user_occurred_idx
   on public.diary_entries (user_id, occurred_at desc);
 create index if not exists diary_entries_user_updated_idx
@@ -33,13 +41,17 @@ create index if not exists drink_presets_user_updated_idx
 
 alter table public.diary_entries enable row level security;
 alter table public.drink_presets enable row level security;
+alter table public.user_settings enable row level security;
 alter table public.diary_entries force row level security;
 alter table public.drink_presets force row level security;
+alter table public.user_settings force row level security;
 
 revoke all on table public.diary_entries from anon;
 revoke all on table public.drink_presets from anon;
+revoke all on table public.user_settings from anon;
 grant select, insert, update, delete on table public.diary_entries to authenticated;
 grant select, insert, update, delete on table public.drink_presets to authenticated;
+grant select, insert, update, delete on table public.user_settings to authenticated;
 
 drop policy if exists "read own diary entries" on public.diary_entries;
 drop policy if exists "insert own diary entries" on public.diary_entries;
@@ -77,6 +89,25 @@ create policy "update own drink presets"
   with check ((select auth.uid()) is not null and (select auth.uid()) = user_id);
 create policy "delete own drink presets"
   on public.drink_presets for delete to authenticated
+  using ((select auth.uid()) is not null and (select auth.uid()) = user_id);
+
+drop policy if exists "read own user settings" on public.user_settings;
+drop policy if exists "insert own user settings" on public.user_settings;
+drop policy if exists "update own user settings" on public.user_settings;
+drop policy if exists "delete own user settings" on public.user_settings;
+
+create policy "read own user settings"
+  on public.user_settings for select to authenticated
+  using ((select auth.uid()) is not null and (select auth.uid()) = user_id);
+create policy "insert own user settings"
+  on public.user_settings for insert to authenticated
+  with check ((select auth.uid()) is not null and (select auth.uid()) = user_id);
+create policy "update own user settings"
+  on public.user_settings for update to authenticated
+  using ((select auth.uid()) is not null and (select auth.uid()) = user_id)
+  with check ((select auth.uid()) is not null and (select auth.uid()) = user_id);
+create policy "delete own user settings"
+  on public.user_settings for delete to authenticated
   using ((select auth.uid()) is not null and (select auth.uid()) = user_id);
 
 -- Sicherheitskontrolle: Für anonyme Besucher sind keine Tabellenrechte vorhanden.

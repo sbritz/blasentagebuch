@@ -4,6 +4,8 @@
   const STORAGE_KEY = "blasentagebuch.state.v1";
   const CONFIG_KEY = "blasentagebuch.supabase.v1";
   const URGENCY_MARKER = /^\[\[harndrang:(leicht|mittel|stark)\]\]\s*/i;
+  const DEFAULT_NIGHT_START = "22:00";
+  const DEFAULT_NIGHT_END = "06:00";
   const DEFAULT_PRESETS = [
     { id: "builtin-water", default_key: "builtin-water", name: "Wasser", amount_ml: 250, builtIn: true },
     { id: "builtin-coffee", default_key: "builtin-coffee", name: "Kaffee", amount_ml: 200, builtIn: true },
@@ -11,7 +13,16 @@
     { id: "builtin-juice", default_key: "builtin-juice", name: "Saft", amount_ml: 200, builtIn: true }
   ];
 
-  const freshState = () => ({ entries: [], presets: [], defaultsMaterialized: false, nightStart: "22:00", nightEnd: "06:00", themeMode: "auto" });
+  const freshState = () => ({
+    entries: [],
+    presets: [],
+    defaultsMaterialized: false,
+    nightStart: DEFAULT_NIGHT_START,
+    nightEnd: DEFAULT_NIGHT_END,
+    nightSettingsUpdatedAt: null,
+    nightSettingsDirty: false,
+    themeMode: "auto"
+  });
   let state = loadState();
   let entryKind = "drink";
   let currentView = "today";
@@ -21,6 +32,7 @@
   let installPrompt = null;
   let toastTimer = null;
   let occurredAtManuallySet = false;
+  let nightSettingsSyncAvailable = null;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -28,7 +40,15 @@
   function loadState() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-      return { ...freshState(), ...saved, entries: (saved.entries || []).map(normalizeEntry) };
+      const loaded = { ...freshState(), ...saved, entries: (saved.entries || []).map(normalizeEntry) };
+      loaded.nightStart = normalizeTimeValue(loaded.nightStart, DEFAULT_NIGHT_START);
+      loaded.nightEnd = normalizeTimeValue(loaded.nightEnd, DEFAULT_NIGHT_END);
+      const customizedLegacySetting = loaded.nightStart !== DEFAULT_NIGHT_START || loaded.nightEnd !== DEFAULT_NIGHT_END;
+      if (!loaded.nightSettingsUpdatedAt && customizedLegacySetting) {
+        loaded.nightSettingsUpdatedAt = new Date().toISOString();
+        loaded.nightSettingsDirty = true;
+      }
+      return loaded;
     } catch {
       return freshState();
     }
@@ -36,6 +56,14 @@
 
   function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function normalizeTimeValue(value, fallback) {
+    const match = String(value || "").match(/^(\d{2}):(\d{2})/);
+    if (!match) return fallback;
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    return hour < 24 && minute < 60 ? `${match[1]}:${match[2]}` : fallback;
   }
 
   function uuid() {
@@ -224,8 +252,8 @@
   function isNight(value) {
     const date = new Date(value);
     const minute = date.getHours() * 60 + date.getMinutes();
-    const [startHour, startMinute] = state.nightStart.split(":").map(Number);
-    const [endHour, endMinute] = state.nightEnd.split(":").map(Number);
+    const [startHour, startMinute] = normalizeTimeValue(state.nightStart, DEFAULT_NIGHT_START).split(":").map(Number);
+    const [endHour, endMinute] = normalizeTimeValue(state.nightEnd, DEFAULT_NIGHT_END).split(":").map(Number);
     const start = startHour * 60 + startMinute;
     const end = endHour * 60 + endMinute;
     return start > end ? minute >= start || minute < end : minute >= start && minute < end;
@@ -354,7 +382,7 @@
     timeline.innerHTML = entries.map((entry) => {
       const detail = entry.kind === "drink" ? (entry.drink_name || "Getränk") : "Toilettengang";
       const meta = entry.kind === "urination"
-        ? [entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : "", isNight(entry.occurred_at) ? "Nachtmenge" : "", entry.note || ""].filter(Boolean).join(" · ")
+        ? [isNight(entry.occurred_at) ? "Nachtmenge" : "Tagmenge", entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : "", entry.note || ""].filter(Boolean).join(" · ")
         : (entry.note || "");
       return `<article class="timeline-item">
         <time class="timeline-time">${formatDate(entry.occurred_at, { hour: "2-digit", minute: "2-digit" })}</time>
@@ -382,11 +410,11 @@
     const rows = dayKeys(count).map((key) => ({ key, stats: statsFor(entriesForDay(key)) }));
     const max = Math.max(1, ...rows.flatMap((row) => [row.stats.intake, row.stats.output]));
     $("#comparison-chart").innerHTML = rows.map(({ key, stats }) => `
-      <div class="chart-day" title="${formatDate(dateFromKey(key), { weekday: "long", day: "2-digit", month: "long" })}: ${formatAmount(stats.intake)} getrunken, ${formatAmount(stats.output)} Urin">
+      <div class="chart-day" title="${formatDate(dateFromKey(key), { weekday: "long", day: "2-digit", month: "long" })}: ${formatAmount(stats.intake)} getrunken, ${formatAmount(stats.dayOutput)} Urin Tag, ${formatAmount(stats.nightOutput)} Urin Nacht">
         <div class="chart-bars"><span class="bar bar-intake" style="height:${Math.max(stats.intake ? 2 : 0, stats.intake / max * 100)}%"></span><span class="bar bar-output" style="height:${Math.max(stats.output ? 2 : 0, stats.output / max * 100)}%"></span></div>
         <span class="chart-label">${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit" })}</span>
       </div>`).join("");
-    $("#comparison-table").innerHTML = [...rows].reverse().map(({ key, stats }) => `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.output)}</td><td>${stats.visits}</td><td>${formatAmount(stats.average)}</td></tr>`).join("");
+    $("#comparison-table").innerHTML = [...rows].reverse().map(({ key, stats }) => `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatAmount(stats.output)}</td><td>${stats.visits}</td><td>${formatAmount(stats.average)}</td></tr>`).join("");
   }
 
   function renderDoctor() {
@@ -400,6 +428,7 @@
     const total = statsFor(entries);
     const dayCount = Math.max(1, Math.round((dateFromKey(to) - dateFromKey(from)) / 86400000) + 1);
     $("#print-period").textContent = `${formatDate(dateFromKey(from), { day: "2-digit", month: "2-digit", year: "numeric" })} bis ${formatDate(dateFromKey(to), { day: "2-digit", month: "2-digit", year: "numeric" })}`;
+    $("#print-night-period").textContent = `Nachtzeit: ${state.nightStart} bis ${state.nightEnd} Uhr`;
     $("#doctor-overview").innerHTML = [
       ["Ø Trinkmenge / Tag", formatAmount(total.intake / dayCount)],
       ["Ø Urinmenge / Tag", formatAmount(total.output / dayCount)],
@@ -419,7 +448,9 @@
       return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${stats.visits}</td><td>${formatAmount(stats.average)}</td></tr>`;
     }).join("");
     $("#doctor-entries").innerHTML = entries.length ? entries.map((entry) => {
-      const details = entry.kind === "drink" ? (entry.drink_name || "–") : (entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : "–");
+      const details = entry.kind === "drink"
+        ? (entry.drink_name || "–")
+        : [isNight(entry.occurred_at) ? "Nachtmenge" : "Tagmenge", entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : ""].filter(Boolean).join(" · ");
       return `<tr><td>${formatDate(entry.occurred_at, { day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatDate(entry.occurred_at, { hour: "2-digit", minute: "2-digit" })}</td><td>${entry.kind === "drink" ? "Getränk" : "Urinieren"}</td><td>${escapeHtml(details)}</td><td>${formatAmount(entry.amount_ml)}</td><td>${escapeHtml(entry.note || "–")}</td></tr>`;
     }).join("") : '<tr><td colspan="6">Keine Einträge in diesem Zeitraum.</td></tr>';
   }
@@ -427,9 +458,35 @@
   function renderSettings() {
     $("#night-start").value = state.nightStart;
     $("#night-end").value = state.nightEnd;
+    if (!currentUser) {
+      $("#night-settings-status").textContent = "Derzeit nur auf diesem Gerät gespeichert. Mit Supabase wird die Nachtzeit geräteübergreifend synchronisiert.";
+    } else if (nightSettingsSyncAvailable === false) {
+      $("#night-settings-status").textContent = "Datenbank-Update nötig: Die Nachtzeit ist noch nicht geräteübergreifend synchronisiert.";
+    } else if (state.nightSettingsDirty) {
+      $("#night-settings-status").textContent = "Änderung wird synchronisiert …";
+    } else {
+      $("#night-settings-status").textContent = "Zwischen deinen Geräten synchronisiert und rückwirkend auf alle Einträge angewendet.";
+    }
     renderPresets();
     updateAuthUi();
     applyTheme();
+  }
+
+  function saveNightSettingsFromForm() {
+    const nightStart = normalizeTimeValue($("#night-start").value, state.nightStart);
+    const nightEnd = normalizeTimeValue($("#night-end").value, state.nightEnd);
+    if (nightStart === nightEnd) {
+      showToast("Beginn und Ende der Nachtzeit müssen unterschiedlich sein.");
+      renderSettings();
+      return;
+    }
+    state.nightStart = nightStart;
+    state.nightEnd = nightEnd;
+    state.nightSettingsUpdatedAt = new Date().toISOString();
+    state.nightSettingsDirty = true;
+    saveState();
+    renderAll();
+    void syncData();
   }
 
   function renderAll() {
@@ -577,6 +634,36 @@
     return { id: preset.id, user_id: currentUser.id, name: preset.name, amount_ml: preset.amount_ml, created_at: preset.created_at, updated_at: preset.updated_at, deleted_at: preset.deleted_at };
   }
 
+  function remoteNightSettings() {
+    return {
+      user_id: currentUser.id,
+      night_start: state.nightStart,
+      night_end: state.nightEnd,
+      updated_at: state.nightSettingsUpdatedAt || new Date().toISOString()
+    };
+  }
+
+  function mergeRemoteNightSettings(remote) {
+    if (!remote) {
+      state.nightSettingsUpdatedAt ||= new Date().toISOString();
+      state.nightSettingsDirty = true;
+      return;
+    }
+    const remoteUpdatedAt = new Date(remote.updated_at || 0).getTime();
+    const localUpdatedAt = new Date(state.nightSettingsUpdatedAt || 0).getTime();
+    if (state.nightSettingsDirty && localUpdatedAt > remoteUpdatedAt) return;
+    state.nightStart = normalizeTimeValue(remote.night_start, DEFAULT_NIGHT_START);
+    state.nightEnd = normalizeTimeValue(remote.night_end, DEFAULT_NIGHT_END);
+    state.nightSettingsUpdatedAt = remote.updated_at;
+    state.nightSettingsDirty = false;
+  }
+
+  function isMissingSettingsTable(error) {
+    const message = String(error?.message || "").toLowerCase();
+    return error?.code === "PGRST205" || error?.code === "42P01"
+      || (message.includes("user_settings") && (message.includes("does not exist") || message.includes("schema cache")));
+  }
+
   function mergeRemote(localItems, remoteItems) {
     const map = new Map(localItems.map((item) => [item.id, item]));
     remoteItems.forEach((remote) => {
@@ -602,12 +689,16 @@
     syncInProgress = true;
     setSyncStatus("syncing", "Synchronisiere …");
     try {
-      const [remoteEntries, remotePresets] = await Promise.all([
+      const [remoteEntries, remotePresets, settingsResult] = await Promise.all([
         fetchAllRows("diary_entries"),
-        fetchAllRows("drink_presets")
+        fetchAllRows("drink_presets"),
+        supabaseClient.from("user_settings").select("*").eq("user_id", currentUser.id).maybeSingle()
       ]);
+      if (settingsResult.error && !isMissingSettingsTable(settingsResult.error)) throw settingsResult.error;
+      nightSettingsSyncAvailable = !settingsResult.error;
       state.entries = mergeRemote(state.entries, remoteEntries.map(normalizeEntry));
       state.presets = mergeRemote(state.presets, remotePresets);
+      if (nightSettingsSyncAvailable) mergeRemoteNightSettings(settingsResult.data);
 
       if (!state.defaultsMaterialized) {
         if (remotePresets.length >= DEFAULT_PRESETS.length) {
@@ -629,9 +720,20 @@
         if (error) throw error;
         dirtyPresets.forEach((preset) => { preset.dirty = false; });
       }
+      if (nightSettingsSyncAvailable && state.nightSettingsDirty) {
+        const { error } = await supabaseClient.from("user_settings").upsert(remoteNightSettings());
+        if (error) throw error;
+        state.nightSettingsDirty = false;
+      }
       saveState();
       renderAll();
-      setSyncStatus("online", "Synchronisiert");
+      if (nightSettingsSyncAvailable) {
+        setSyncStatus("online", "Synchronisiert");
+        $("#auth-message").textContent = "Einträge, Getränke und Nachtzeit sind synchronisiert.";
+      } else {
+        setSyncStatus("error", "Datenbank-Update nötig");
+        $("#auth-message").textContent = "Einträge und Getränke sind synchronisiert. Für die Nachtzeit muss einmal das neue Datenbankschema ausgeführt werden.";
+      }
     } catch (error) {
       console.error(error);
       setSyncStatus("error", "Sync-Fehler");
@@ -778,8 +880,8 @@
     });
     ["#doctor-from", "#doctor-to"].forEach((id) => $(id).addEventListener("change", renderDoctor));
     $("#print-button").addEventListener("click", () => window.print());
-    $("#night-start").addEventListener("change", (event) => { state.nightStart = event.target.value; saveState(); renderAll(); });
-    $("#night-end").addEventListener("change", (event) => { state.nightEnd = event.target.value; saveState(); renderAll(); });
+    $("#night-start").addEventListener("change", saveNightSettingsFromForm);
+    $("#night-end").addEventListener("change", saveNightSettingsFromForm);
     $$('[data-theme-mode]').forEach((button) => button.addEventListener("click", () => setThemeMode(button.dataset.themeMode)));
     $("#theme-toggle").addEventListener("click", () => setThemeMode(resolvedTheme() === "dark" ? "light" : "dark"));
     $("#preset-form").addEventListener("submit", (event) => {
@@ -849,8 +951,12 @@
     });
     window.addEventListener("online", () => void syncData());
     window.addEventListener("offline", () => setSyncStatus("", "Offline – lokal gespeichert"));
-    window.addEventListener("focus", () => refreshCurrentEntryTime());
-    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshCurrentEntryTime(); });
+    window.addEventListener("focus", () => { refreshCurrentEntryTime(); if (currentUser) void syncData(); });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      refreshCurrentEntryTime();
+      if (currentUser) void syncData();
+    });
     const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
     const handleSystemThemeChange = () => { if (state.themeMode === "auto") applyTheme(); };
     if (themeMedia.addEventListener) themeMedia.addEventListener("change", handleSystemThemeChange);

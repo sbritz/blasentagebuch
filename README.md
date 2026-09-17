@@ -11,6 +11,7 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 - Harndrang bei jedem Toilettengang in den Stufen leicht, mittel oder stark
 - sicheres Löschen unbenutzter Getränke; verwendete Vorlagen bleiben geschützt
 - Tages-/Nachtmengen, Toilettengänge und Durchschnittsmenge
+- geräteübergreifend synchronisierte Nachtzeit mit rückwirkender Neuberechnung aller Einträge
 - Vergleich für 7, 14 oder 30 Tage
 - Bearbeiten und Löschen mit synchronisierten Löschmarkierungen
 - druckoptimierte Arztansicht für einen frei wählbaren Zeitraum
@@ -36,6 +37,10 @@ Danach `http://localhost:4173` aufrufen. Ohne Supabase bleiben die Daten ausschl
 3. Unter **Authentication → Providers** E-Mail/Passwort aktivieren. Für ein privates Ein-Personen-Tagebuch kann die öffentliche Registrierung nach dem ersten Konto wieder deaktiviert werden.
 4. Die **Project URL** und den öffentlichen **Publishable Key** aus den API-Einstellungen kopieren.
 5. In der App unter **Einstellungen → Synchronisation** beides zusammen mit E-Mail und Passwort eintragen.
+
+### Bestehendes Supabase-Projekt aktualisieren
+
+Wer das Projekt bereits vor der Synchronisation der Nachtzeit eingerichtet hat, führt einmal zusätzlich den Inhalt von `supabase/add-user-settings.sql` im Supabase SQL Editor aus. Danach die App auf dem Gerät öffnen, auf dem die gewünschte Nachtzeit eingestellt ist, und **Jetzt synchronisieren** wählen. Die Einstellung wird anschließend auf allen Geräten übernommen und alle bisherigen Einträge werden in Tagesansicht, Vergleich, Arztansicht und PDF neu ausgewertet.
 
 Der öffentliche Browser-Key ist kein Geheimnis. Der Schutz entsteht durch Authentifizierung und die RLS-Regeln in `schema.sql`. Einen Secret- oder `service_role`-Key niemals in die App oder in GitHub kopieren.
 
