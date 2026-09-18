@@ -709,8 +709,16 @@
       keys.push(localDayKey(cursor));
       cursor.setDate(cursor.getDate() + 1);
     }
-    $("#doctor-days").innerHTML = keys.map((key) => {
-      const stats = statsFor(entries.filter((entry) => classifyEntry(entry).dayKey === key), key);
+    const dailyRows = keys.map((key) => ({ key, stats: statsFor(entries.filter((entry) => classifyEntry(entry).dayKey === key), key) }));
+    const chartMaximum = Math.max(1, ...dailyRows.flatMap((row) => [row.stats.intake, row.stats.output]));
+    const doctorChart = $("#doctor-chart");
+    doctorChart.classList.toggle("compact", dailyRows.length > 14);
+    doctorChart.innerHTML = dailyRows.map(({ key, stats }) => `
+      <div class="chart-day" title="${formatDate(dateFromKey(key), { weekday: "long", day: "2-digit", month: "long" })}: ${formatAmount(stats.intake)} getrunken, ${formatAmount(stats.output)} Urin gesamt">
+        <div class="chart-bars"><span class="bar bar-intake" style="height:${Math.max(stats.intake ? 2 : 0, stats.intake / chartMaximum * 100)}%"></span><span class="bar bar-output" style="height:${Math.max(stats.output ? 2 : 0, stats.output / chartMaximum * 100)}%"></span></div>
+        <span class="chart-label">${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit" })}</span>
+      </div>`).join("");
+    $("#doctor-days").innerHTML = dailyRows.map(({ key, stats }) => {
       return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.after20)}</td><td>${formatAmount(stats.beforeSleep)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatPercent(stats.nightShare)}</td><td>${stats.dayVisits}/${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td><td>${formatAmount(stats.maximum)}</td></tr>`;
     }).join("");
     $("#doctor-urgency").innerHTML = ["leicht", "mittel", "stark"].map((level) => {

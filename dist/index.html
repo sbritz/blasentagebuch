@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=16" />
+    <link rel="stylesheet" href="./app.css?v=17" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=16"></script>
+    <script defer src="./app.js?v=17"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -226,6 +226,13 @@
           <p id="print-night-period"></p>
         </div>
         <div id="doctor-overview" class="doctor-overview"></div>
+        <section class="chart-card doctor-chart-card" aria-labelledby="doctor-chart-heading">
+          <div class="doctor-chart-heading">
+            <h3 id="doctor-chart-heading">Mengenverlauf pro Messtag</h3>
+            <div class="legend"><span><i class="legend-intake"></i> Getrunken</span><span><i class="legend-output"></i> Urin gesamt</span></div>
+          </div>
+          <div id="doctor-chart" class="comparison-chart doctor-chart"></div>
+        </section>
         <section class="table-card doctor-table-card">
           <h3>Tagesübersicht</h3>
           <div class="table-scroll">
