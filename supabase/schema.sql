@@ -4,10 +4,12 @@
 create table if not exists public.diary_entries (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  kind text not null check (kind in ('drink', 'urination')),
-  amount_ml integer not null check (amount_ml between 1 and 5000),
+  kind text not null check (kind in ('drink', 'urination', 'meal')),
+  amount_ml integer check ((kind = 'meal' and amount_ml is null) or (kind in ('drink', 'urination') and amount_ml between 1 and 5000)),
   occurred_at timestamptz not null,
   drink_name text check (char_length(drink_name) <= 60),
+  meal_name text check (char_length(meal_name) <= 80),
+  tags text[] not null default '{}',
   note text check (char_length(note) <= 160),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -42,6 +44,17 @@ create table if not exists public.sleep_events (
   deleted_at timestamptz
 );
 
+create table if not exists public.daily_contexts (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  day_key date not null,
+  tags text[] not null default '{}',
+  note text check (char_length(note) <= 500),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  primary key (user_id, day_key)
+);
+
 create index if not exists diary_entries_user_occurred_idx
   on public.diary_entries (user_id, occurred_at desc);
 create index if not exists diary_entries_user_updated_idx
@@ -52,24 +65,32 @@ create index if not exists sleep_events_user_occurred_idx
   on public.sleep_events (user_id, occurred_at desc);
 create index if not exists sleep_events_user_updated_idx
   on public.sleep_events (user_id, updated_at);
+create index if not exists daily_contexts_user_day_idx
+  on public.daily_contexts (user_id, day_key);
+create index if not exists daily_contexts_user_updated_idx
+  on public.daily_contexts (user_id, updated_at);
 
 alter table public.diary_entries enable row level security;
 alter table public.drink_presets enable row level security;
 alter table public.user_settings enable row level security;
 alter table public.sleep_events enable row level security;
+alter table public.daily_contexts enable row level security;
 alter table public.diary_entries force row level security;
 alter table public.drink_presets force row level security;
 alter table public.user_settings force row level security;
 alter table public.sleep_events force row level security;
+alter table public.daily_contexts force row level security;
 
 revoke all on table public.diary_entries from anon;
 revoke all on table public.drink_presets from anon;
 revoke all on table public.user_settings from anon;
 revoke all on table public.sleep_events from anon;
+revoke all on table public.daily_contexts from anon;
 grant select, insert, update, delete on table public.diary_entries to authenticated;
 grant select, insert, update, delete on table public.drink_presets to authenticated;
 grant select, insert, update, delete on table public.user_settings to authenticated;
 grant select, insert, update, delete on table public.sleep_events to authenticated;
+grant select, insert, update, delete on table public.daily_contexts to authenticated;
 
 drop policy if exists "read own diary entries" on public.diary_entries;
 drop policy if exists "insert own diary entries" on public.diary_entries;
@@ -145,6 +166,25 @@ create policy "update own sleep events"
   with check ((select auth.uid()) is not null and (select auth.uid()) = user_id);
 create policy "delete own sleep events"
   on public.sleep_events for delete to authenticated
+  using ((select auth.uid()) is not null and (select auth.uid()) = user_id);
+
+drop policy if exists "read own daily contexts" on public.daily_contexts;
+drop policy if exists "insert own daily contexts" on public.daily_contexts;
+drop policy if exists "update own daily contexts" on public.daily_contexts;
+drop policy if exists "delete own daily contexts" on public.daily_contexts;
+
+create policy "read own daily contexts"
+  on public.daily_contexts for select to authenticated
+  using ((select auth.uid()) is not null and (select auth.uid()) = user_id);
+create policy "insert own daily contexts"
+  on public.daily_contexts for insert to authenticated
+  with check ((select auth.uid()) is not null and (select auth.uid()) = user_id);
+create policy "update own daily contexts"
+  on public.daily_contexts for update to authenticated
+  using ((select auth.uid()) is not null and (select auth.uid()) = user_id)
+  with check ((select auth.uid()) is not null and (select auth.uid()) = user_id);
+create policy "delete own daily contexts"
+  on public.daily_contexts for delete to authenticated
   using ((select auth.uid()) is not null and (select auth.uid()) = user_id);
 
 -- Sicherheitskontrolle: Für anonyme Besucher sind keine Tabellenrechte vorhanden.

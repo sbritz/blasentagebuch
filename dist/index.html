@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=14" />
+    <link rel="stylesheet" href="./app.css?v=15" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=14"></script>
+    <script defer src="./app.js?v=15"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -53,6 +53,9 @@
             <button class="type-option" type="button" role="radio" aria-checked="false" data-kind="urination">
               <span aria-hidden="true">↘</span> Urinieren
             </button>
+            <button class="type-option" type="button" role="radio" aria-checked="false" data-kind="meal">
+              <span aria-hidden="true">⌁</span> Mahlzeit
+            </button>
           </div>
 
           <form id="entry-form" novalidate>
@@ -73,7 +76,22 @@
               <select id="drink-preset" name="drinkPreset"></select>
               <button id="manage-drinks-button" class="manage-drinks-button" type="button">＋ Getränke verwalten</button>
             </div>
-            <div class="amount-row">
+            <div id="meal-fields" class="meal-fields" hidden>
+              <div class="field">
+                <label for="meal-name">Mahlzeit</label>
+                <input id="meal-name" type="text" maxlength="80" placeholder="z. B. Gemüsepfanne mit Skyr" />
+              </div>
+              <fieldset class="choice-field tag-field">
+                <legend>Merkmale <span>(optional)</span></legend>
+                <div class="tag-options">
+                  <label><input type="checkbox" name="meal-tags" value="prepared" /><span>Fertiggericht</span></label>
+                  <label><input type="checkbox" name="meal-tags" value="salty" /><span>Salzig</span></label>
+                  <label><input type="checkbox" name="meal-tags" value="water_rich" /><span>Wasserreich</span></label>
+                  <label><input type="checkbox" name="meal-tags" value="large_portion" /><span>Große Portion</span></label>
+                </div>
+              </fieldset>
+            </div>
+            <div id="amount-row" class="amount-row">
               <div class="quick-amounts-wrap">
                 <span class="control-label">Schnellauswahl</span>
                 <div class="quick-amounts" aria-label="Schnellauswahl Menge">
@@ -129,11 +147,37 @@
           </div>
           <div class="metric-grid">
             <article class="metric metric-intake"><span>Getrunken</span><strong id="metric-intake">0 ml</strong></article>
+            <article class="metric metric-intake"><span>Nach 20 Uhr</span><strong id="metric-after-20">0 ml</strong></article>
+            <article class="metric metric-intake"><span>3 h vor Schlaf</span><strong id="metric-before-sleep">0 ml</strong></article>
             <article class="metric"><span>Urin Tag</span><strong id="metric-day">0 ml</strong></article>
             <article class="metric metric-night"><span>Urin Nacht</span><strong id="metric-night">0 ml</strong></article>
+            <article class="metric metric-night"><span>Nachtanteil</span><strong id="metric-night-share">–</strong></article>
             <article class="metric"><span>Toilettengänge</span><strong id="metric-visits">0</strong></article>
             <article class="metric"><span>Ø Menge</span><strong id="metric-average">0 ml</strong></article>
+            <article class="metric"><span>Max. Entleerung</span><strong id="metric-maximum">0 ml</strong></article>
           </div>
+        </section>
+
+        <section class="daily-context-card" aria-labelledby="daily-context-heading">
+          <div class="section-heading">
+            <div><span class="eyebrow">Zusammenhänge festhalten</span><h2 id="daily-context-heading">Tagesfaktoren & Notiz</h2></div>
+            <label class="compact-field" for="daily-context-day">Messtag <input id="daily-context-day" type="date" /></label>
+          </div>
+          <form id="daily-context-form">
+            <p id="daily-context-status" class="inline-message" role="status"></p>
+            <div class="tag-options daily-tag-options" aria-label="Besondere Faktoren des Messtags">
+              <label><input type="checkbox" name="daily-tags" value="cold" /><span>Kältegefühl</span></label>
+              <label><input type="checkbox" name="daily-tags" value="kidney_belt" /><span>Nierengurt</span></label>
+              <label><input type="checkbox" name="daily-tags" value="sport" /><span>Sport</span></label>
+              <label><input type="checkbox" name="daily-tags" value="sweating" /><span>Stark geschwitzt</span></label>
+              <label><input type="checkbox" name="daily-tags" value="stress" /><span>Stress</span></label>
+            </div>
+            <div class="field">
+              <label for="daily-note">Tagesnotiz <span>(optional)</span></label>
+              <textarea id="daily-note" maxlength="500" rows="3" placeholder="z. B. spät große Gemüsepfanne und 500 g Skyr, danach sehr durstig"></textarea>
+            </div>
+            <button class="secondary-button" type="submit">Tagesangaben speichern</button>
+          </form>
         </section>
 
         <section class="timeline-section" aria-labelledby="timeline-heading">
@@ -160,7 +204,7 @@
         <section class="table-card">
           <div class="table-scroll">
             <table>
-              <thead><tr><th>Messtag</th><th>Getrunken</th><th>Urin Tag</th><th>Urin Nacht</th><th>Urin gesamt</th><th>Gänge</th><th title="Nächtliche Toilettengänge ohne Morgenurin">Nachtgänge</th><th>Ø</th></tr></thead>
+              <thead><tr><th>Messtag</th><th>Getrunken</th><th>Nach 20 h</th><th>3 h vor Schlaf</th><th>Urin Tag</th><th>Urin Nacht</th><th>Nachtanteil</th><th>Tag-/Nachtgänge</th><th>Ø</th><th>Max.</th></tr></thead>
               <tbody id="comparison-table"></tbody>
             </table>
           </div>
@@ -186,8 +230,21 @@
           <h3>Tagesübersicht</h3>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>Messtag</th><th>Getrunken</th><th>Urin Tag</th><th>Urin Nacht</th><th>Gänge</th><th title="Nächtliche Toilettengänge ohne Morgenurin">Nachtgänge</th><th>Ø</th></tr></thead>
+              <thead><tr><th>Messtag</th><th>Getrunken</th><th>Nach 20 h</th><th>3 h vor Schlaf</th><th>Urin Tag</th><th>Urin Nacht</th><th>Nachtanteil</th><th>Gänge Tag/Nacht</th><th>Ø</th><th>Max.</th></tr></thead>
               <tbody id="doctor-days"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="table-card doctor-table-card">
+          <h3>Harndrang-Auswertung</h3>
+          <div id="doctor-urgency" class="urgency-summary"></div>
+        </section>
+        <section class="table-card doctor-table-card">
+          <h3>Tagesfaktoren und Tagesnotizen</h3>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Messtag</th><th>Faktoren</th><th>Notiz</th></tr></thead>
+              <tbody id="doctor-contexts"></tbody>
             </table>
           </div>
         </section>
@@ -301,9 +358,18 @@
       <form id="edit-form" method="dialog">
         <div class="dialog-heading"><h2>Eintrag bearbeiten</h2><button class="icon-button" value="cancel" aria-label="Schließen">×</button></div>
         <input id="edit-id" type="hidden" />
-        <div class="field"><label for="edit-kind">Art</label><select id="edit-kind"><option value="drink">Getränk</option><option value="urination">Urinieren</option></select></div>
-        <div id="edit-name-wrap" class="field"><label for="edit-name">Getränk</label><input id="edit-name" maxlength="60" /></div>
-        <div class="field"><label for="edit-amount">Menge</label><div class="input-suffix"><input id="edit-amount" type="number" min="1" max="5000" required /><span>ml</span></div></div>
+        <div class="field"><label for="edit-kind">Art</label><select id="edit-kind"><option value="drink">Getränk</option><option value="urination">Urinieren</option><option value="meal">Mahlzeit</option></select></div>
+        <div id="edit-name-wrap" class="field"><label id="edit-name-label" for="edit-name">Getränk</label><input id="edit-name" maxlength="80" /></div>
+        <div id="edit-amount-wrap" class="field"><label for="edit-amount">Menge</label><div class="input-suffix"><input id="edit-amount" type="number" min="1" max="5000" /><span>ml</span></div></div>
+        <fieldset id="edit-meal-tags-wrap" class="choice-field tag-field" hidden>
+          <legend>Merkmale <span>(optional)</span></legend>
+          <div class="tag-options">
+            <label><input type="checkbox" name="edit-meal-tags" value="prepared" /><span>Fertiggericht</span></label>
+            <label><input type="checkbox" name="edit-meal-tags" value="salty" /><span>Salzig</span></label>
+            <label><input type="checkbox" name="edit-meal-tags" value="water_rich" /><span>Wasserreich</span></label>
+            <label><input type="checkbox" name="edit-meal-tags" value="large_portion" /><span>Große Portion</span></label>
+          </div>
+        </fieldset>
         <fieldset id="edit-urgency-wrap" class="choice-field" hidden>
           <legend>Harndrang</legend>
           <div class="urgency-options">

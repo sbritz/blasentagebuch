@@ -4,7 +4,8 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 
 ## Enthalten
 
-- Schnellerfassung für `Getränk` und `Urinieren` mit automatischer, editierbarer Uhrzeit
+- Schnellerfassung für `Getränk`, `Urinieren` und frei benannte Mahlzeiten mit automatischer, editierbarer Uhrzeit
+- optionale Mahlzeiten-Tags für Fertiggericht, salzig, wasserreich und große Portion
 - laufend aktualisierte Uhrzeit, solange sie für den aktuellen Eintrag nicht manuell geändert wurde
 - mitgelieferte und eigene Getränketypen, jeweils bearbeitbar
 - individuelle Mengenwahl pro Eintrag mit automatisch an die häufigsten Eingaben angepassten Schnelltasten und freiem Zahlenfeld
@@ -12,7 +13,10 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 - sicheres Löschen unbenutzter Getränke; verwendete Vorlagen bleiben geschützt
 - medizinische Messtage nach persönlicher Schlaf- und Aufstehzeit statt nach Mitternacht
 - Morgenurin als Abschluss der vorherigen Nachtmenge, getrennt von den eigentlichen Nachtgängen
-- Tages-/Nachtmengen, Toilettengänge und Durchschnittsmenge
+- Tages-/Nachtmengen, Nachtanteil, Tag-/Nachtgänge, Durchschnitt und maximale Einzelentleerung
+- Auswertung der Flüssigkeitsmenge nach 20 Uhr und in den letzten drei Stunden vor dem Schlafengehen
+- Harndrang-Auswertung nach Stufe mit Anzahl und Durchschnittsmenge
+- Tagesfaktoren und freie Tagesnotiz, geräteübergreifend synchronisiert
 - geräteübergreifend synchronisierte Schlaf-/Aufstehzeiten und Ersatz-Nachtzeit mit rückwirkender Neuberechnung aller Einträge
 - Vergleich für 7, 14 oder 30 Tage
 - Bearbeiten und Löschen mit synchronisierten Löschmarkierungen
@@ -46,6 +50,7 @@ Wer das Projekt bereits eingerichtet hat, führt im Supabase SQL Editor einmal d
 
 1. `supabase/add-user-settings.sql` für die geräteübergreifende Ersatz-Nachtzeit, falls noch nicht geschehen.
 2. `supabase/add-sleep-events.sql` für Schlaf- und Aufstehzeiten.
+3. `supabase/add-meals-and-daily-context.sql` für Mahlzeiten, Tagesfaktoren und Tagesnotizen.
 
 Danach die App neu laden und unter **Einstellungen → Synchronisation → Jetzt synchronisieren** wählen. Schlafzeiten, Nachtzeit und alle bisherigen Einträge werden dann in Tagesansicht, Vergleich, Arztansicht und PDF nach derselben Messtag-Logik ausgewertet. Für ältere Tage ohne erfasste Schlafzeiten verwendet die App weiterhin die eingestellte Ersatz-Nachtzeit und ordnet frühmorgendliche Einträge dem vorherigen Messtag zu.
 

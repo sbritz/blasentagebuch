@@ -7,6 +7,8 @@
   const DEFAULT_NIGHT_START = "22:00";
   const DEFAULT_NIGHT_END = "06:00";
   const DEFAULT_QUICK_AMOUNTS = [100, 250, 320, 430, 500, 1000];
+  const MEAL_TAG_LABELS = { prepared: "Fertiggericht", salty: "Salzig", water_rich: "Wasserreich", large_portion: "Große Portion" };
+  const DAILY_TAG_LABELS = { cold: "Kältegefühl", kidney_belt: "Nierengurt", sport: "Sport", sweating: "Stark geschwitzt", stress: "Stress" };
   const DEFAULT_PRESETS = [
     { id: "builtin-water", default_key: "builtin-water", name: "Wasser", amount_ml: 250, builtIn: true },
     { id: "builtin-coffee", default_key: "builtin-coffee", name: "Kaffee", amount_ml: 200, builtIn: true },
@@ -18,6 +20,7 @@
     entries: [],
     presets: [],
     sleepEvents: [],
+    dailyContexts: [],
     defaultsMaterialized: false,
     nightStart: DEFAULT_NIGHT_START,
     nightEnd: DEFAULT_NIGHT_END,
@@ -36,6 +39,7 @@
   let occurredAtManuallySet = false;
   let nightSettingsSyncAvailable = null;
   let sleepEventsSyncAvailable = null;
+  let extendedDiarySyncAvailable = null;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -47,7 +51,8 @@
         ...freshState(),
         ...saved,
         entries: (saved.entries || []).map(normalizeEntry),
-        sleepEvents: saved.sleepEvents || []
+        sleepEvents: saved.sleepEvents || [],
+        dailyContexts: saved.dailyContexts || []
       };
       loaded.nightStart = normalizeTimeValue(loaded.nightStart, DEFAULT_NIGHT_START);
       loaded.nightEnd = normalizeTimeValue(loaded.nightEnd, DEFAULT_NIGHT_END);
@@ -166,12 +171,17 @@
     return `${new Intl.NumberFormat("de-DE").format(Math.round(value || 0))} ml`;
   }
 
+  function formatPercent(value) {
+    return value === null || !Number.isFinite(value) ? "–" : `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(value)} %`;
+  }
+
   function normalizeEntry(entry) {
-    if (entry.kind !== "urination") return { ...entry, urgency: null };
+    const base = { ...entry, meal_name: entry.meal_name || null, tags: Array.isArray(entry.tags) ? entry.tags : [] };
+    if (entry.kind !== "urination") return { ...base, urgency: null };
     const note = String(entry.note || "");
     const match = note.match(URGENCY_MARKER);
     return {
-      ...entry,
+      ...base,
       urgency: entry.urgency || (match ? match[1].toLowerCase() : null),
       note: match ? (note.replace(URGENCY_MARKER, "").trim() || null) : entry.note
     };
@@ -193,6 +203,15 @@
 
   function setRadioValue(name, value) {
     $$(`input[name="${name}"]`).forEach((input) => { input.checked = input.value === value; });
+  }
+
+  function selectedCheckboxValues(name) {
+    return $$(`input[name="${name}"]:checked`).map((input) => input.value);
+  }
+
+  function setCheckboxValues(name, values = []) {
+    const selected = new Set(values);
+    $$(`input[name="${name}"]`).forEach((input) => { input.checked = selected.has(input.value); });
   }
 
   function updateQuickAmountSelection() {
@@ -235,6 +254,14 @@
 
   function activeEntries() {
     return state.entries.filter((entry) => !entry.deleted_at);
+  }
+
+  function activeDailyContexts() {
+    return state.dailyContexts.filter((context) => !context.deleted_at);
+  }
+
+  function contextForDay(dayKey) {
+    return activeDailyContexts().find((context) => context.day_key === dayKey) || null;
   }
 
   function activePresets() {
@@ -377,16 +404,54 @@
     return { phase: "day", pendingMorningVoid: !morningVoidRecorded, source: "event", since: latestEvent.occurred_at };
   }
 
-  function statsFor(entries) {
-    const intake = entries.filter((item) => item.kind === "drink").reduce((sum, item) => sum + item.amount_ml, 0);
+  function sleepStartForDay(dayKey) {
+    const event = activeSleepEvents().filter((item) => item.kind === "sleep_start"
+      && classifyEntry({ id: `sleep-${item.id}`, kind: "meal", occurred_at: item.occurred_at }).dayKey === dayKey).at(-1);
+    if (event) return new Date(event.occurred_at);
+    const fallback = dateFromKey(dayKey);
+    const [hour, minute] = normalizeTimeValue(state.nightStart, DEFAULT_NIGHT_START).split(":").map(Number);
+    fallback.setHours(hour, minute, 0, 0);
+    return fallback;
+  }
+
+  function statsFor(entries, dayKey = null) {
+    const drinks = entries.filter((item) => item.kind === "drink");
+    const intake = drinks.reduce((sum, item) => sum + Number(item.amount_ml || 0), 0);
+    const after20 = drinks.filter((item) => new Date(item.occurred_at).getHours() >= 20).reduce((sum, item) => sum + Number(item.amount_ml || 0), 0);
+    const beforeSleep = drinks.filter((item) => {
+      const sleepStart = sleepStartForDay(dayKey || classifyEntry(item).dayKey).getTime();
+      const occurredAt = new Date(item.occurred_at).getTime();
+      return occurredAt <= sleepStart && occurredAt >= sleepStart - 3 * 60 * 60 * 1000;
+    }).reduce((sum, item) => sum + Number(item.amount_ml || 0), 0);
     const output = entries.filter((item) => item.kind === "urination");
-    const dayOutput = output.filter((item) => classifyEntry(item).phase === "day").reduce((sum, item) => sum + item.amount_ml, 0);
-    const nightOutput = output.filter((item) => classifyEntry(item).phase === "night").reduce((sum, item) => sum + item.amount_ml, 0);
+    const dayItems = output.filter((item) => classifyEntry(item).phase === "day");
+    const dayOutput = dayItems.reduce((sum, item) => sum + Number(item.amount_ml || 0), 0);
+    const nightOutput = output.filter((item) => classifyEntry(item).phase === "night").reduce((sum, item) => sum + Number(item.amount_ml || 0), 0);
     const nightVisits = output.filter((item) => {
       const classification = classifyEntry(item);
       return classification.phase === "night" && !classification.morningVoid;
     }).length;
-    return { intake, dayOutput, nightOutput, output: dayOutput + nightOutput, visits: output.length, nightVisits, average: output.length ? (dayOutput + nightOutput) / output.length : 0 };
+    const totalOutput = dayOutput + nightOutput;
+    const urgency = Object.fromEntries(["leicht", "mittel", "stark"].map((level) => {
+      const items = output.filter((item) => item.urgency === level);
+      const amount = items.reduce((sum, item) => sum + Number(item.amount_ml || 0), 0);
+      return [level, { count: items.length, average: items.length ? amount / items.length : 0 }];
+    }));
+    return {
+      intake,
+      after20,
+      beforeSleep,
+      dayOutput,
+      nightOutput,
+      output: totalOutput,
+      nightShare: totalOutput ? nightOutput / totalOutput * 100 : null,
+      visits: output.length,
+      dayVisits: dayItems.length,
+      nightVisits,
+      average: output.length ? totalOutput / output.length : 0,
+      maximum: Math.max(0, ...output.map((item) => Number(item.amount_ml || 0))),
+      urgency
+    };
   }
 
   function entriesForDay(key) {
@@ -409,10 +474,12 @@
       button.setAttribute("aria-checked", String(selected));
     });
     $("#drink-preset-wrap").hidden = kind !== "drink";
+    $("#meal-fields").hidden = kind !== "meal";
+    $("#amount-row").hidden = kind === "meal";
     $("#urgency-wrap").hidden = kind !== "urination";
     $("#amount").placeholder = kind === "drink" ? "250" : "300";
-    $(".primary-button[type='submit']").textContent = kind === "drink" ? "Getränk speichern" : "Toilettengang speichern";
-    renderQuickAmounts();
+    $("#entry-form .primary-button[type='submit']").textContent = kind === "drink" ? "Getränk speichern" : (kind === "urination" ? "Toilettengang speichern" : "Mahlzeit speichern");
+    if (kind !== "meal") renderQuickAmounts();
     refreshCurrentEntryTime();
   }
 
@@ -506,17 +573,59 @@
     }
   }
 
+  function renderDailyContext(dayKey = $("#daily-context-day").value || currentDiaryDayKey()) {
+    if (!$("#daily-context-day").value) $("#daily-context-day").value = dayKey;
+    const context = contextForDay(dayKey);
+    setCheckboxValues("daily-tags", context?.tags || []);
+    $("#daily-note").value = context?.note || "";
+    if (!currentUser) {
+      $("#daily-context-status").textContent = "Auf diesem Gerät";
+    } else if (extendedDiarySyncAvailable === false) {
+      $("#daily-context-status").textContent = "Datenbank-Update nötig";
+    } else if (context?.dirty) {
+      $("#daily-context-status").textContent = "Wird synchronisiert …";
+    } else if (extendedDiarySyncAvailable === null) {
+      $("#daily-context-status").textContent = "Synchronisation wird geprüft …";
+    } else {
+      $("#daily-context-status").textContent = "Synchronisiert";
+    }
+  }
+
+  function saveDailyContext(dayKey, tags, note) {
+    const existing = state.dailyContexts.find((context) => context.day_key === dayKey && !context.deleted_at);
+    const now = new Date().toISOString();
+    const context = {
+      id: existing?.id || uuid(),
+      day_key: dayKey,
+      tags: tags.filter((tag) => DAILY_TAG_LABELS[tag]),
+      note: String(note || "").trim().slice(0, 500) || null,
+      created_at: existing?.created_at || now,
+      updated_at: now,
+      deleted_at: null,
+      dirty: true
+    };
+    if (existing) Object.assign(existing, context); else state.dailyContexts.push(context);
+    saveState();
+    renderAll();
+    void syncData();
+  }
+
   function renderToday() {
     const today = currentDiaryDayKey();
     const entries = entriesForDay(today).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
-    const stats = statsFor(entries);
+    const stats = statsFor(entries, today);
     renderPhaseControl();
+    renderDailyContext();
     $("#summary-heading").textContent = `Messtag ${formatDate(dateFromKey(today), { day: "2-digit", month: "2-digit" })}`;
     $("#metric-intake").textContent = formatAmount(stats.intake);
+    $("#metric-after-20").textContent = formatAmount(stats.after20);
+    $("#metric-before-sleep").textContent = formatAmount(stats.beforeSleep);
     $("#metric-day").textContent = formatAmount(stats.dayOutput);
     $("#metric-night").textContent = formatAmount(stats.nightOutput);
+    $("#metric-night-share").textContent = formatPercent(stats.nightShare);
     $("#metric-visits").textContent = String(stats.visits);
     $("#metric-average").textContent = formatAmount(stats.average);
+    $("#metric-maximum").textContent = formatAmount(stats.maximum);
     $("#today-count").textContent = entries.length === 1 ? "1 Eintrag" : `${entries.length} Einträge`;
     const timeline = $("#today-timeline");
     if (!entries.length) {
@@ -524,17 +633,19 @@
       return;
     }
     timeline.innerHTML = entries.map((entry) => {
-      const detail = entry.kind === "drink" ? (entry.drink_name || "Getränk") : "Toilettengang";
+      const detail = entry.kind === "drink" ? (entry.drink_name || "Getränk") : (entry.kind === "meal" ? (entry.meal_name || "Mahlzeit") : "Toilettengang");
       const classification = classifyEntry(entry);
       const phaseLabel = classification.morningVoid ? "Morgenurin · Nachtmenge" : (classification.phase === "night" ? "Nachtmenge" : "Tagmenge");
       const meta = entry.kind === "urination"
         ? [phaseLabel, entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : "", entry.note || ""].filter(Boolean).join(" · ")
-        : (entry.note || "");
+        : (entry.kind === "meal" ? [...entry.tags.map((tag) => MEAL_TAG_LABELS[tag]).filter(Boolean), entry.note || ""].filter(Boolean).join(" · ") : (entry.note || ""));
+      const icon = entry.kind === "drink" ? "+" : (entry.kind === "meal" ? "⌁" : "↘");
+      const amount = entry.kind === "meal" ? "" : `<strong class="timeline-amount">${formatAmount(entry.amount_ml)}</strong>`;
       return `<article class="timeline-item">
         <time class="timeline-time">${formatDate(entry.occurred_at, { hour: "2-digit", minute: "2-digit" })}</time>
-        <span class="timeline-icon ${entry.kind}" aria-hidden="true">${entry.kind === "drink" ? "+" : "↘"}</span>
+        <span class="timeline-icon ${entry.kind}" aria-hidden="true">${icon}</span>
         <div class="timeline-copy"><strong>${escapeHtml(detail)}</strong><span>${escapeHtml(meta)}</span></div>
-        <div class="timeline-actions"><strong class="timeline-amount">${formatAmount(entry.amount_ml)}</strong><button class="edit-entry-button" type="button" data-edit-entry="${escapeHtml(entry.id)}" aria-label="${escapeHtml(detail)} bearbeiten"><span aria-hidden="true">✎</span> Bearbeiten</button></div>
+        <div class="timeline-actions">${amount}<button class="edit-entry-button" type="button" data-edit-entry="${escapeHtml(entry.id)}" aria-label="${escapeHtml(detail)} bearbeiten"><span aria-hidden="true">✎</span> Bearbeiten</button></div>
       </article>`;
     }).join("");
   }
@@ -553,14 +664,14 @@
 
   function renderComparison() {
     const count = Number($("#compare-days").value || 7);
-    const rows = dayKeys(count).map((key) => ({ key, stats: statsFor(entriesForDay(key)) }));
+    const rows = dayKeys(count).map((key) => ({ key, stats: statsFor(entriesForDay(key), key) }));
     const max = Math.max(1, ...rows.flatMap((row) => [row.stats.intake, row.stats.output]));
     $("#comparison-chart").innerHTML = rows.map(({ key, stats }) => `
       <div class="chart-day" title="${formatDate(dateFromKey(key), { weekday: "long", day: "2-digit", month: "long" })}: ${formatAmount(stats.intake)} getrunken, ${formatAmount(stats.dayOutput)} Urin Tag, ${formatAmount(stats.nightOutput)} Urin Nacht">
         <div class="chart-bars"><span class="bar bar-intake" style="height:${Math.max(stats.intake ? 2 : 0, stats.intake / max * 100)}%"></span><span class="bar bar-output" style="height:${Math.max(stats.output ? 2 : 0, stats.output / max * 100)}%"></span></div>
         <span class="chart-label">${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit" })}</span>
       </div>`).join("");
-    $("#comparison-table").innerHTML = [...rows].reverse().map(({ key, stats }) => `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatAmount(stats.output)}</td><td>${stats.visits}</td><td>${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td></tr>`).join("");
+    $("#comparison-table").innerHTML = [...rows].reverse().map(({ key, stats }) => `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.after20)}</td><td>${formatAmount(stats.beforeSleep)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatPercent(stats.nightShare)}</td><td>${stats.dayVisits}/${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td><td>${formatAmount(stats.maximum)}</td></tr>`).join("");
   }
 
   function renderDoctor() {
@@ -576,11 +687,15 @@
     $("#print-period").textContent = `${formatDate(dateFromKey(from), { day: "2-digit", month: "2-digit", year: "numeric" })} bis ${formatDate(dateFromKey(to), { day: "2-digit", month: "2-digit", year: "numeric" })}`;
     $("#print-night-period").textContent = `Nachtmenge inklusive Morgenurin; nächtliche Gänge ohne Morgenurin. Ersatz-Nachtzeit für Tage ohne Schlafdaten: ${state.nightStart} bis ${state.nightEnd} Uhr.`;
     $("#doctor-overview").innerHTML = [
-      ["Ø Trinkmenge / Tag", formatAmount(total.intake / dayCount)],
-      ["Ø Urinmenge / Tag", formatAmount(total.output / dayCount)],
-      ["Toilettengänge gesamt", String(total.visits)],
-      ["Nächtliche Gänge (ohne Morgenurin)", String(total.nightVisits)],
-      ["Ø Menge / Gang", formatAmount(total.average)]
+      ["Trinken / 24 h", formatAmount(total.intake / dayCount)],
+      ["Urin / 24 h", formatAmount(total.output / dayCount)],
+      ["Nachturin / 24 h", formatAmount(total.nightOutput / dayCount)],
+      ["Nachtanteil", formatPercent(total.nightShare)],
+      ["Gänge Tag / Nacht", `${total.dayVisits} / ${total.nightVisits}`],
+      ["Ø Entleerung", formatAmount(total.average)],
+      ["Max. Entleerung", formatAmount(total.maximum)],
+      ["Ø getrunken nach 20 h", formatAmount(total.after20 / dayCount)],
+      ["Ø in 3 h vor Schlaf", formatAmount(total.beforeSleep / dayCount)]
     ].map(([label, value]) => `<article class="doctor-stat"><span>${label}</span><strong>${value}</strong></article>`).join("");
 
     const keys = [];
@@ -591,15 +706,25 @@
       cursor.setDate(cursor.getDate() + 1);
     }
     $("#doctor-days").innerHTML = keys.map((key) => {
-      const stats = statsFor(entries.filter((entry) => classifyEntry(entry).dayKey === key));
-      return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${stats.visits}</td><td>${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td></tr>`;
+      const stats = statsFor(entries.filter((entry) => classifyEntry(entry).dayKey === key), key);
+      return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.after20)}</td><td>${formatAmount(stats.beforeSleep)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatPercent(stats.nightShare)}</td><td>${stats.dayVisits}/${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td><td>${formatAmount(stats.maximum)}</td></tr>`;
     }).join("");
+    $("#doctor-urgency").innerHTML = ["leicht", "mittel", "stark"].map((level) => {
+      const item = total.urgency[level];
+      return `<article class="urgency-stat"><span>${urgencyLabel(level)}</span><strong>${item.count}× · Ø ${formatAmount(item.average)}</strong></article>`;
+    }).join("");
+    const contexts = activeDailyContexts().filter((context) => context.day_key >= from && context.day_key <= to && (context.note || context.tags.length));
+    $("#doctor-contexts").innerHTML = contexts.length ? contexts.sort((a, b) => a.day_key.localeCompare(b.day_key)).map((context) => `
+      <tr><td>${formatDate(dateFromKey(context.day_key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${escapeHtml(context.tags.map((tag) => DAILY_TAG_LABELS[tag]).filter(Boolean).join(", ") || "–")}</td><td>${escapeHtml(context.note || "–")}</td></tr>`).join("") : '<tr><td colspan="3">Keine Tagesfaktoren oder Tagesnotizen in diesem Zeitraum.</td></tr>';
     $("#doctor-entries").innerHTML = entries.length ? entries.map((entry) => {
       const classification = classifyEntry(entry);
       const details = entry.kind === "drink"
         ? (entry.drink_name || "–")
-        : [classification.morningVoid ? "Morgenurin" : (classification.phase === "night" ? "Nachtmenge" : "Tagmenge"), `Messtag ${formatDate(dateFromKey(classification.dayKey), { day: "2-digit", month: "2-digit" })}`, entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : ""].filter(Boolean).join(" · ");
-      return `<tr><td>${formatDate(entry.occurred_at, { day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatDate(entry.occurred_at, { hour: "2-digit", minute: "2-digit" })}</td><td>${entry.kind === "drink" ? "Getränk" : "Urinieren"}</td><td>${escapeHtml(details)}</td><td>${formatAmount(entry.amount_ml)}</td><td>${escapeHtml(entry.note || "–")}</td></tr>`;
+        : (entry.kind === "meal"
+          ? [entry.meal_name || "Mahlzeit", ...entry.tags.map((tag) => MEAL_TAG_LABELS[tag]).filter(Boolean)].join(" · ")
+          : [classification.morningVoid ? "Morgenurin" : (classification.phase === "night" ? "Nachtmenge" : "Tagmenge"), `Messtag ${formatDate(dateFromKey(classification.dayKey), { day: "2-digit", month: "2-digit" })}`, entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : ""].filter(Boolean).join(" · "));
+      const kind = entry.kind === "drink" ? "Getränk" : (entry.kind === "meal" ? "Mahlzeit" : "Urinieren");
+      return `<tr><td>${formatDate(entry.occurred_at, { day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatDate(entry.occurred_at, { hour: "2-digit", minute: "2-digit" })}</td><td>${kind}</td><td>${escapeHtml(details)}</td><td>${entry.kind === "meal" ? "–" : formatAmount(entry.amount_ml)}</td><td>${escapeHtml(entry.note || "–")}</td></tr>`;
     }).join("") : '<tr><td colspan="6">Keine Einträge in diesem Zeitraum.</td></tr>';
   }
 
@@ -754,18 +879,23 @@
   }
 
   function saveEntry(data, existingId = null) {
+    const kind = ["drink", "urination", "meal"].includes(data.kind) ? data.kind : "drink";
     const amount = Number(data.amount_ml);
-    if (!Number.isFinite(amount) || amount < 1 || amount > 5000) throw new Error("Bitte eine Menge zwischen 1 und 5.000 ml eingeben.");
+    if (kind !== "meal" && (!Number.isFinite(amount) || amount < 1 || amount > 5000)) throw new Error("Bitte eine Menge zwischen 1 und 5.000 ml eingeben.");
+    const mealName = String(data.meal_name || "").trim();
+    if (kind === "meal" && !mealName) throw new Error("Bitte die Mahlzeit kurz benennen.");
     const occurredAt = new Date(data.occurred_at || new Date());
     if (Number.isNaN(occurredAt.getTime())) throw new Error("Bitte einen gültigen Zeitpunkt wählen.");
     const existing = existingId ? state.entries.find((item) => item.id === existingId) : null;
     const entry = {
       id: existingId || uuid(),
-      kind: data.kind === "urination" ? "urination" : "drink",
-      amount_ml: Math.round(amount),
+      kind,
+      amount_ml: kind === "meal" ? null : Math.round(amount),
       occurred_at: occurredAt.toISOString(),
-      drink_name: data.kind === "drink" ? String(data.drink_name || "Getränk").trim().slice(0, 60) : null,
-      urgency: data.kind === "urination" && ["leicht", "mittel", "stark"].includes(data.urgency) ? data.urgency : null,
+      drink_name: kind === "drink" ? String(data.drink_name || "Getränk").trim().slice(0, 60) : null,
+      meal_name: kind === "meal" ? mealName.slice(0, 80) : null,
+      tags: kind === "meal" ? (data.tags || []).filter((tag) => MEAL_TAG_LABELS[tag]) : [],
+      urgency: kind === "urination" && ["leicht", "mittel", "stark"].includes(data.urgency) ? data.urgency : null,
       note: String(data.note || "").trim().slice(0, 130) || null,
       created_at: existing?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -796,18 +926,24 @@
     $("#edit-id").value = entry.id;
     $("#edit-kind").value = entry.kind;
     updateEditFields();
-    $("#edit-name").value = entry.drink_name || "";
-    $("#edit-amount").value = entry.amount_ml;
+    $("#edit-name").value = entry.kind === "meal" ? (entry.meal_name || "") : (entry.drink_name || "");
+    $("#edit-amount").value = entry.amount_ml || "";
     setSplitDateTime("#edit-date", "#edit-time", new Date(entry.occurred_at));
     $("#edit-note").value = entry.note || "";
     setRadioValue("edit-urgency", entry.urgency);
+    setCheckboxValues("edit-meal-tags", entry.tags || []);
     $("#edit-dialog").showModal();
   }
 
   function updateEditFields() {
-    const isUrination = $("#edit-kind").value === "urination";
+    const kind = $("#edit-kind").value;
+    const isUrination = kind === "urination";
+    const isMeal = kind === "meal";
     $("#edit-name-wrap").hidden = isUrination;
+    $("#edit-name-label").textContent = isMeal ? "Mahlzeit" : "Getränk";
+    $("#edit-amount-wrap").hidden = isMeal;
     $("#edit-urgency-wrap").hidden = !isUrination;
+    $("#edit-meal-tags-wrap").hidden = !isMeal;
   }
 
   function getConfig() {
@@ -853,8 +989,8 @@
     if (!$("#supabase-key").value) $("#supabase-key").value = config.key || "";
   }
 
-  function remoteEntry(entry) {
-    return {
+  function remoteEntry(entry, includeExtended = false) {
+    const row = {
       id: entry.id,
       user_id: currentUser.id,
       kind: entry.kind,
@@ -866,6 +1002,11 @@
       updated_at: entry.updated_at,
       deleted_at: entry.deleted_at
     };
+    if (includeExtended) {
+      row.meal_name = entry.meal_name;
+      row.tags = entry.tags || [];
+    }
+    return row;
   }
 
   function remotePreset(preset) {
@@ -881,6 +1022,18 @@
       created_at: event.created_at,
       updated_at: event.updated_at,
       deleted_at: event.deleted_at
+    };
+  }
+
+  function remoteDailyContext(context) {
+    return {
+      user_id: currentUser.id,
+      day_key: context.day_key,
+      tags: context.tags || [],
+      note: context.note,
+      created_at: context.created_at,
+      updated_at: context.updated_at,
+      deleted_at: context.deleted_at
     };
   }
 
@@ -923,6 +1076,15 @@
     return [...map.values()];
   }
 
+  function mergeRemoteByKey(localItems, remoteItems, key) {
+    const map = new Map(localItems.map((item) => [item[key], item]));
+    remoteItems.forEach((remote) => {
+      const local = map.get(remote[key]);
+      if (!local || (!local.dirty && new Date(remote.updated_at) >= new Date(local.updated_at))) map.set(remote[key], { ...local, ...remote, dirty: false });
+    });
+    return [...map.values()];
+  }
+
   async function fetchAllRows(table) {
     const rows = [];
     const pageSize = 1000;
@@ -948,18 +1110,21 @@
     syncInProgress = true;
     setSyncStatus("syncing", "Synchronisiere …");
     try {
-      const [remoteEntries, remotePresets, settingsResult, sleepEventsResult] = await Promise.all([
+      const [remoteEntries, remotePresets, settingsResult, sleepEventsResult, dailyContextsResult] = await Promise.all([
         fetchAllRows("diary_entries"),
         fetchAllRows("drink_presets"),
         supabaseClient.from("user_settings").select("*").eq("user_id", currentUser.id).maybeSingle(),
-        fetchOptionalRows("sleep_events")
+        fetchOptionalRows("sleep_events"),
+        fetchOptionalRows("daily_contexts")
       ]);
       if (settingsResult.error && !isMissingTable(settingsResult.error, "user_settings")) throw settingsResult.error;
       nightSettingsSyncAvailable = !settingsResult.error;
       sleepEventsSyncAvailable = !sleepEventsResult.error;
+      extendedDiarySyncAvailable = !dailyContextsResult.error;
       state.entries = mergeRemote(state.entries, remoteEntries.map(normalizeEntry));
       state.presets = mergeRemote(state.presets, remotePresets);
       if (sleepEventsSyncAvailable) state.sleepEvents = mergeRemote(state.sleepEvents, sleepEventsResult.data);
+      if (extendedDiarySyncAvailable) state.dailyContexts = mergeRemoteByKey(state.dailyContexts, dailyContextsResult.data.map((context) => ({ ...context, tags: Array.isArray(context.tags) ? context.tags : [] })), "day_key");
       if (nightSettingsSyncAvailable) mergeRemoteNightSettings(settingsResult.data);
 
       if (!state.defaultsMaterialized) {
@@ -970,9 +1135,9 @@
         }
       }
 
-      const dirtyEntries = state.entries.filter((entry) => entry.dirty);
+      const dirtyEntries = state.entries.filter((entry) => entry.dirty && (entry.kind !== "meal" || extendedDiarySyncAvailable));
       if (dirtyEntries.length) {
-        const { error } = await supabaseClient.from("diary_entries").upsert(dirtyEntries.map(remoteEntry));
+        const { error } = await supabaseClient.from("diary_entries").upsert(dirtyEntries.map((entry) => remoteEntry(entry, extendedDiarySyncAvailable)));
         if (error) throw error;
         dirtyEntries.forEach((entry) => { entry.dirty = false; });
       }
@@ -988,6 +1153,12 @@
         if (error) throw error;
         dirtySleepEvents.forEach((event) => { event.dirty = false; });
       }
+      const dirtyDailyContexts = state.dailyContexts.filter((context) => context.dirty);
+      if (extendedDiarySyncAvailable && dirtyDailyContexts.length) {
+        const { error } = await supabaseClient.from("daily_contexts").upsert(dirtyDailyContexts.map(remoteDailyContext));
+        if (error) throw error;
+        dirtyDailyContexts.forEach((context) => { context.dirty = false; });
+      }
       if (nightSettingsSyncAvailable && state.nightSettingsDirty) {
         const { error } = await supabaseClient.from("user_settings").upsert(remoteNightSettings());
         if (error) throw error;
@@ -995,12 +1166,12 @@
       }
       saveState();
       renderAll();
-      if (nightSettingsSyncAvailable && sleepEventsSyncAvailable) {
+      if (nightSettingsSyncAvailable && sleepEventsSyncAvailable && extendedDiarySyncAvailable) {
         setSyncStatus("online", "Synchronisiert");
-        $("#auth-message").textContent = "Einträge, Getränke, Nachtzeit und Schlafzeiten sind synchronisiert.";
+        $("#auth-message").textContent = "Einträge, Mahlzeiten, Tagesangaben, Getränke und Schlafzeiten sind synchronisiert.";
       } else {
         setSyncStatus("error", "Datenbank-Update nötig");
-        $("#auth-message").textContent = "Einträge und Getränke sind synchronisiert. Für Nacht- und Schlafzeiten muss einmal das aktuelle Datenbankschema ausgeführt werden.";
+        $("#auth-message").textContent = "Die bisherigen Einträge bleiben synchronisiert. Für alle neuen Funktionen muss einmal das aktuelle Datenbank-Update ausgeführt werden.";
       }
     } catch (error) {
       console.error(error);
@@ -1047,18 +1218,20 @@
       context.registerTool({
         name: "add_diary_entry",
         title: "Tagebucheintrag hinzufügen",
-        description: "Speichert ein Getränk oder einen Toilettengang im sichtbaren Blasentagebuch.",
+        description: "Speichert ein Getränk, einen Toilettengang oder eine Mahlzeit im sichtbaren Blasentagebuch.",
         inputSchema: {
           type: "object",
           properties: {
-            kind: { type: "string", enum: ["drink", "urination"] },
+            kind: { type: "string", enum: ["drink", "urination", "meal"] },
             amount_ml: { type: "integer", minimum: 1, maximum: 5000 },
             occurred_at: { type: "string", description: "ISO-8601-Zeitpunkt; Standard ist jetzt." },
             drink_name: { type: "string", maxLength: 60 },
+            meal_name: { type: "string", maxLength: 80 },
+            tags: { type: "array", items: { type: "string", enum: Object.keys(MEAL_TAG_LABELS) } },
             urgency: { type: "string", enum: ["leicht", "mittel", "stark"] },
             note: { type: "string", maxLength: 130 }
           },
-          required: ["kind", "amount_ml"],
+          required: ["kind"],
           additionalProperties: false
         },
         annotations: { readOnlyHint: false, untrustedContentHint: false },
@@ -1074,8 +1247,9 @@
         inputSchema: { type: "object", properties: {}, additionalProperties: false },
         annotations: { readOnlyHint: true, untrustedContentHint: false },
         execute() {
-          const stats = statsFor(entriesForDay(currentDiaryDayKey()));
-          return { intake_ml: stats.intake, urine_day_ml: stats.dayOutput, urine_night_ml: stats.nightOutput, visits: stats.visits, average_ml: Math.round(stats.average) };
+          const dayKey = currentDiaryDayKey();
+          const stats = statsFor(entriesForDay(dayKey), dayKey);
+          return { intake_ml: stats.intake, after_20_ml: stats.after20, before_sleep_3h_ml: stats.beforeSleep, urine_day_ml: stats.dayOutput, urine_night_ml: stats.nightOutput, night_share_percent: stats.nightShare, visits: stats.visits, average_ml: Math.round(stats.average), maximum_ml: stats.maximum };
         }
       });
     } catch (error) {
@@ -1115,12 +1289,23 @@
         if (entryKind === "drink" && !preset) throw new Error("Bitte zuerst ein Getränk anlegen oder auswählen.");
         const urgency = selectedRadioValue("urgency");
         if (entryKind === "urination" && !urgency) throw new Error("Bitte den Harndrang auswählen: leicht, mittel oder stark.");
-        const savedEntry = saveEntry({ kind: entryKind, amount_ml: $("#amount").value, occurred_at: combinedDateTime("#occurred-date", "#occurred-time"), drink_name: preset?.name, urgency, note: $("#note").value });
+        const savedEntry = saveEntry({
+          kind: entryKind,
+          amount_ml: $("#amount").value,
+          occurred_at: combinedDateTime("#occurred-date", "#occurred-time"),
+          drink_name: preset?.name,
+          meal_name: $("#meal-name").value,
+          tags: selectedCheckboxValues("meal-tags"),
+          urgency,
+          note: $("#note").value
+        });
         const classification = classifyEntry(savedEntry);
         showToast(classification.morningVoid
           ? `Morgenurin gespeichert und Messtag ${formatDate(dateFromKey(classification.dayKey), { day: "2-digit", month: "2-digit" })} zugeordnet.`
-          : (entryKind === "drink" ? "Getränk gespeichert" : "Toilettengang gespeichert"));
+          : (entryKind === "drink" ? "Getränk gespeichert" : (entryKind === "meal" ? "Mahlzeit gespeichert" : "Toilettengang gespeichert")));
         $("#amount").value = "";
+        $("#meal-name").value = "";
+        setCheckboxValues("meal-tags", []);
         updateQuickAmountSelection();
         setRadioValue("urgency", null);
         $("#note").value = "";
@@ -1142,12 +1327,28 @@
       try {
         const editUrgency = selectedRadioValue("edit-urgency");
         if ($("#edit-kind").value === "urination" && !editUrgency) throw new Error("Bitte den Harndrang auswählen: leicht, mittel oder stark.");
-        saveEntry({ kind: $("#edit-kind").value, drink_name: $("#edit-name").value, amount_ml: $("#edit-amount").value, occurred_at: combinedDateTime("#edit-date", "#edit-time"), urgency: editUrgency, note: $("#edit-note").value }, $("#edit-id").value);
+        const editKind = $("#edit-kind").value;
+        saveEntry({
+          kind: editKind,
+          drink_name: editKind === "drink" ? $("#edit-name").value : null,
+          meal_name: editKind === "meal" ? $("#edit-name").value : null,
+          tags: selectedCheckboxValues("edit-meal-tags"),
+          amount_ml: $("#edit-amount").value,
+          occurred_at: combinedDateTime("#edit-date", "#edit-time"),
+          urgency: editUrgency,
+          note: $("#edit-note").value
+        }, $("#edit-id").value);
         $("#edit-dialog").close();
         showToast("Eintrag aktualisiert");
       } catch (error) { showToast(error.message); }
     });
     $("#edit-kind").addEventListener("change", updateEditFields);
+    $("#daily-context-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      saveDailyContext($("#daily-context-day").value || currentDiaryDayKey(), selectedCheckboxValues("daily-tags"), $("#daily-note").value);
+      showToast("Tagesangaben gespeichert");
+    });
+    $("#daily-context-day").addEventListener("change", () => renderDailyContext($("#daily-context-day").value));
     $("#delete-entry-button").addEventListener("click", () => {
       if (!window.confirm("Diesen Eintrag wirklich löschen?")) return;
       deleteEntry($("#edit-id").value);
@@ -1272,6 +1473,7 @@
     refreshCurrentEntryTime(true);
     const today = new Date();
     const currentDiaryDay = dateFromKey(currentDiaryDayKey(today));
+    $("#daily-context-day").value = localDayKey(currentDiaryDay);
     const from = new Date(currentDiaryDay); from.setDate(currentDiaryDay.getDate() - 6);
     $("#doctor-from").value = localDayKey(from);
     $("#doctor-to").value = localDayKey(currentDiaryDay);
