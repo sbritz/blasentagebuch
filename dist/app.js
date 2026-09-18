@@ -175,6 +175,10 @@
     return value === null || !Number.isFinite(value) ? "–" : `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(value)} %`;
   }
 
+  function formatCount(value) {
+    return new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value || 0);
+  }
+
   function normalizeEntry(entry) {
     const base = { ...entry, meal_name: entry.meal_name || null, tags: Array.isArray(entry.tags) ? entry.tags : [] };
     if (entry.kind !== "urination") return { ...base, urgency: null };
@@ -687,15 +691,15 @@
     $("#print-period").textContent = `${formatDate(dateFromKey(from), { day: "2-digit", month: "2-digit", year: "numeric" })} bis ${formatDate(dateFromKey(to), { day: "2-digit", month: "2-digit", year: "numeric" })}`;
     $("#print-night-period").textContent = `Nachtmenge inklusive Morgenurin; nächtliche Gänge ohne Morgenurin. Ersatz-Nachtzeit für Tage ohne Schlafdaten: ${state.nightStart} bis ${state.nightEnd} Uhr.`;
     $("#doctor-overview").innerHTML = [
-      ["Trinken / 24 h", formatAmount(total.intake / dayCount)],
-      ["Urin / 24 h", formatAmount(total.output / dayCount)],
-      ["Nachturin / 24 h", formatAmount(total.nightOutput / dayCount)],
-      ["Nachtanteil", formatPercent(total.nightShare)],
-      ["Gänge Tag / Nacht", `${total.dayVisits} / ${total.nightVisits}`],
-      ["Ø Entleerung", formatAmount(total.average)],
-      ["Max. Entleerung", formatAmount(total.maximum)],
-      ["Ø getrunken nach 20 h", formatAmount(total.after20 / dayCount)],
-      ["Ø in 3 h vor Schlaf", formatAmount(total.beforeSleep / dayCount)]
+      ["Ø Trinken / 24 h", formatAmount(total.intake / dayCount)],
+      ["Ø Urin / 24 h", formatAmount(total.output / dayCount)],
+      ["Ø Nachturin / 24 h", formatAmount(total.nightOutput / dayCount)],
+      ["Nachtanteil im Zeitraum", formatPercent(total.nightShare)],
+      ["Ø Gänge Tag / Nacht je 24 h", `${formatCount(total.dayVisits / dayCount)} / ${formatCount(total.nightVisits / dayCount)}`],
+      ["Ø Entleerung / Gang", formatAmount(total.average)],
+      ["Max. Entleerung im Zeitraum", formatAmount(total.maximum)],
+      ["Ø nach 20 h / 24 h", formatAmount(total.after20 / dayCount)],
+      ["Ø in 3 h vor Schlaf / 24 h", formatAmount(total.beforeSleep / dayCount)]
     ].map(([label, value]) => `<article class="doctor-stat"><span>${label}</span><strong>${value}</strong></article>`).join("");
 
     const keys = [];
