@@ -10,8 +10,10 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 - individuelle Mengenwahl pro Eintrag mit Schnelltasten und freiem Zahlenfeld
 - Harndrang bei jedem Toilettengang in den Stufen leicht, mittel oder stark
 - sicheres Löschen unbenutzter Getränke; verwendete Vorlagen bleiben geschützt
+- medizinische Messtage nach persönlicher Schlaf- und Aufstehzeit statt nach Mitternacht
+- Morgenurin als Abschluss der vorherigen Nachtmenge, getrennt von den eigentlichen Nachtgängen
 - Tages-/Nachtmengen, Toilettengänge und Durchschnittsmenge
-- geräteübergreifend synchronisierte Nachtzeit mit rückwirkender Neuberechnung aller Einträge
+- geräteübergreifend synchronisierte Schlaf-/Aufstehzeiten und Ersatz-Nachtzeit mit rückwirkender Neuberechnung aller Einträge
 - Vergleich für 7, 14 oder 30 Tage
 - Bearbeiten und Löschen mit synchronisierten Löschmarkierungen
 - druckoptimierte Arztansicht für einen frei wählbaren Zeitraum
@@ -40,7 +42,12 @@ Danach `http://localhost:4173` aufrufen. Ohne Supabase bleiben die Daten ausschl
 
 ### Bestehendes Supabase-Projekt aktualisieren
 
-Wer das Projekt bereits vor der Synchronisation der Nachtzeit eingerichtet hat, führt einmal zusätzlich den Inhalt von `supabase/add-user-settings.sql` im Supabase SQL Editor aus. Danach die App auf dem Gerät öffnen, auf dem die gewünschte Nachtzeit eingestellt ist, und **Jetzt synchronisieren** wählen. Die Einstellung wird anschließend auf allen Geräten übernommen und alle bisherigen Einträge werden in Tagesansicht, Vergleich, Arztansicht und PDF neu ausgewertet.
+Wer das Projekt bereits eingerichtet hat, führt im Supabase SQL Editor einmal die noch fehlenden Erweiterungen aus:
+
+1. `supabase/add-user-settings.sql` für die geräteübergreifende Ersatz-Nachtzeit, falls noch nicht geschehen.
+2. `supabase/add-sleep-events.sql` für Schlaf- und Aufstehzeiten.
+
+Danach die App neu laden und unter **Einstellungen → Synchronisation → Jetzt synchronisieren** wählen. Schlafzeiten, Nachtzeit und alle bisherigen Einträge werden dann in Tagesansicht, Vergleich, Arztansicht und PDF nach derselben Messtag-Logik ausgewertet. Für ältere Tage ohne erfasste Schlafzeiten verwendet die App weiterhin die eingestellte Ersatz-Nachtzeit und ordnet frühmorgendliche Einträge dem vorherigen Messtag zu.
 
 Der öffentliche Browser-Key ist kein Geheimnis. Der Schutz entsteht durch Authentifizierung und die RLS-Regeln in `schema.sql`. Einen Secret- oder `service_role`-Key niemals in die App oder in GitHub kopieren.
 

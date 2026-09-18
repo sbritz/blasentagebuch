@@ -16,6 +16,7 @@
   const freshState = () => ({
     entries: [],
     presets: [],
+    sleepEvents: [],
     defaultsMaterialized: false,
     nightStart: DEFAULT_NIGHT_START,
     nightEnd: DEFAULT_NIGHT_END,
@@ -33,6 +34,7 @@
   let toastTimer = null;
   let occurredAtManuallySet = false;
   let nightSettingsSyncAvailable = null;
+  let sleepEventsSyncAvailable = null;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -40,7 +42,12 @@
   function loadState() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-      const loaded = { ...freshState(), ...saved, entries: (saved.entries || []).map(normalizeEntry) };
+      const loaded = {
+        ...freshState(),
+        ...saved,
+        entries: (saved.entries || []).map(normalizeEntry),
+        sleepEvents: saved.sleepEvents || []
+      };
       loaded.nightStart = normalizeTimeValue(loaded.nightStart, DEFAULT_NIGHT_START);
       loaded.nightEnd = normalizeTimeValue(loaded.nightEnd, DEFAULT_NIGHT_END);
       const customizedLegacySetting = loaded.nightStart !== DEFAULT_NIGHT_START || loaded.nightEnd !== DEFAULT_NIGHT_END;
@@ -249,26 +256,115 @@
     return activeEntries().filter((entry) => entry.kind === "drink" && normalizedName(entry.drink_name) === name).length;
   }
 
-  function isNight(value) {
+  function activeSleepEvents() {
+    return state.sleepEvents
+      .filter((event) => !event.deleted_at)
+      .sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at));
+  }
+
+  function shiftDayKey(key, days) {
+    const date = dateFromKey(key);
+    date.setDate(date.getDate() + days);
+    return localDayKey(date);
+  }
+
+  function clockNightInfo(value) {
     const date = new Date(value);
     const minute = date.getHours() * 60 + date.getMinutes();
     const [startHour, startMinute] = normalizeTimeValue(state.nightStart, DEFAULT_NIGHT_START).split(":").map(Number);
     const [endHour, endMinute] = normalizeTimeValue(state.nightEnd, DEFAULT_NIGHT_END).split(":").map(Number);
     const start = startHour * 60 + startMinute;
     const end = endHour * 60 + endMinute;
-    return start > end ? minute >= start || minute < end : minute >= start && minute < end;
+    const wrapsMidnight = start > end;
+    const night = wrapsMidnight ? minute >= start || minute < end : minute >= start && minute < end;
+    return { night, afterMidnight: night && wrapsMidnight && minute < end };
+  }
+
+  function fallbackClassification(value) {
+    const date = new Date(value);
+    const clock = clockNightInfo(date);
+    const calendarDay = localDayKey(date);
+    return {
+      phase: clock.night ? "night" : "day",
+      dayKey: clock.afterMidnight ? shiftDayKey(calendarDay, -1) : calendarDay,
+      morningVoid: false,
+      source: "fallback"
+    };
+  }
+
+  function classifyEntry(entry) {
+    const occurredAt = new Date(entry.occurred_at);
+    const timestamp = occurredAt.getTime();
+    const events = activeSleepEvents();
+    const latestEvent = [...events].reverse().find((event) => new Date(event.occurred_at).getTime() <= timestamp);
+    if (!latestEvent) return fallbackClassification(occurredAt);
+
+    const latestEventTime = new Date(latestEvent.occurred_at).getTime();
+    const earlierWakes = events.filter((event) => event.kind === "wake_up" && new Date(event.occurred_at).getTime() < latestEventTime);
+    const latestEarlierWake = earlierWakes.at(-1);
+
+    if (latestEvent.kind === "sleep_start") {
+      const dayKey = latestEarlierWake
+        ? localDayKey(latestEarlierWake.occurred_at)
+        : fallbackClassification(latestEvent.occurred_at).dayKey;
+      return { phase: "night", dayKey, morningVoid: false, source: "event" };
+    }
+
+    const wakeDayKey = localDayKey(latestEvent.occurred_at);
+    const nextSleep = events.find((event) => event.kind === "sleep_start" && new Date(event.occurred_at).getTime() > latestEventTime);
+    const nextSleepTime = nextSleep ? new Date(nextSleep.occurred_at).getTime() : Number.POSITIVE_INFINITY;
+    const firstUrinationAfterWake = activeEntries()
+      .filter((item) => item.kind === "urination" && new Date(item.occurred_at).getTime() >= latestEventTime && new Date(item.occurred_at).getTime() < nextSleepTime)
+      .sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at))[0];
+    const morningVoid = entry.kind === "urination" && firstUrinationAfterWake?.id === entry.id;
+    if (!morningVoid) return { phase: "day", dayKey: wakeDayKey, morningVoid: false, source: "event" };
+
+    const previousWake = events
+      .filter((event) => event.kind === "wake_up" && new Date(event.occurred_at).getTime() < latestEventTime)
+      .at(-1);
+    return {
+      phase: "night",
+      dayKey: previousWake ? localDayKey(previousWake.occurred_at) : shiftDayKey(wakeDayKey, -1),
+      morningVoid: true,
+      source: "event"
+    };
+  }
+
+  function currentDiaryDayKey(date = new Date()) {
+    const probe = { id: "current-time", kind: "drink", occurred_at: date.toISOString() };
+    return classifyEntry(probe).dayKey;
+  }
+
+  function currentPhaseStatus(date = new Date()) {
+    const timestamp = date.getTime();
+    const events = activeSleepEvents().filter((event) => new Date(event.occurred_at).getTime() <= timestamp);
+    const latestEvent = events.at(-1);
+    if (!latestEvent) {
+      return { phase: clockNightInfo(date).night ? "night" : "day", pendingMorningVoid: false, source: "fallback", since: null };
+    }
+    if (latestEvent.kind === "sleep_start") return { phase: "night", pendingMorningVoid: false, source: "event", since: latestEvent.occurred_at };
+    const nextSleep = activeSleepEvents().find((event) => event.kind === "sleep_start" && new Date(event.occurred_at).getTime() > new Date(latestEvent.occurred_at).getTime());
+    const nextSleepTime = nextSleep ? new Date(nextSleep.occurred_at).getTime() : Number.POSITIVE_INFINITY;
+    const morningVoidRecorded = activeEntries().some((entry) => entry.kind === "urination"
+      && new Date(entry.occurred_at).getTime() >= new Date(latestEvent.occurred_at).getTime()
+      && new Date(entry.occurred_at).getTime() < nextSleepTime);
+    return { phase: "day", pendingMorningVoid: !morningVoidRecorded, source: "event", since: latestEvent.occurred_at };
   }
 
   function statsFor(entries) {
     const intake = entries.filter((item) => item.kind === "drink").reduce((sum, item) => sum + item.amount_ml, 0);
     const output = entries.filter((item) => item.kind === "urination");
-    const dayOutput = output.filter((item) => !isNight(item.occurred_at)).reduce((sum, item) => sum + item.amount_ml, 0);
-    const nightOutput = output.filter((item) => isNight(item.occurred_at)).reduce((sum, item) => sum + item.amount_ml, 0);
-    return { intake, dayOutput, nightOutput, output: dayOutput + nightOutput, visits: output.length, average: output.length ? (dayOutput + nightOutput) / output.length : 0 };
+    const dayOutput = output.filter((item) => classifyEntry(item).phase === "day").reduce((sum, item) => sum + item.amount_ml, 0);
+    const nightOutput = output.filter((item) => classifyEntry(item).phase === "night").reduce((sum, item) => sum + item.amount_ml, 0);
+    const nightVisits = output.filter((item) => {
+      const classification = classifyEntry(item);
+      return classification.phase === "night" && !classification.morningVoid;
+    }).length;
+    return { intake, dayOutput, nightOutput, output: dayOutput + nightOutput, visits: output.length, nightVisits, average: output.length ? (dayOutput + nightOutput) / output.length : 0 };
   }
 
   function entriesForDay(key) {
-    return activeEntries().filter((entry) => localDayKey(entry.occurred_at) === key);
+    return activeEntries().filter((entry) => classifyEntry(entry).dayKey === key);
   }
 
   function showToast(message) {
@@ -364,10 +460,31 @@
     showToast("Getränk gelöscht");
   }
 
+  function renderPhaseControl() {
+    const status = currentPhaseStatus();
+    const phaseLabel = status.phase === "night" ? "Schlafphase" : "Tagphase";
+    const since = status.since ? ` seit ${formatDate(status.since, { hour: "2-digit", minute: "2-digit" })} Uhr` : "";
+    $("#phase-label").textContent = `${phaseLabel}${since}`;
+    $("#wake-up-button").hidden = status.phase !== "night";
+    $("#sleep-start-button").hidden = status.phase !== "day";
+    $("#phase-control").classList.toggle("night", status.phase === "night");
+    if (status.pendingMorningVoid) {
+      $("#phase-help").textContent = "Der nächste Toilettengang wird als Morgenurin der vergangenen Nacht zugeordnet.";
+    } else if (status.source === "fallback") {
+      $("#phase-help").textContent = `Automatisch nach der Ersatz-Nachtzeit ${state.nightStart}–${state.nightEnd} Uhr. Tippe beim Schlafengehen oder Aufstehen für eine genaue Auswertung.`;
+    } else {
+      $("#phase-help").textContent = status.phase === "night"
+        ? "Nächtliche Toilettengänge zählen zu diesem Messtag."
+        : "Beim Aufstehen wird der nächste Toilettengang automatisch als Morgenurin erkannt.";
+    }
+  }
+
   function renderToday() {
-    const today = localDayKey(new Date());
+    const today = currentDiaryDayKey();
     const entries = entriesForDay(today).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
     const stats = statsFor(entries);
+    renderPhaseControl();
+    $("#summary-heading").textContent = `Messtag ${formatDate(dateFromKey(today), { day: "2-digit", month: "2-digit" })}`;
     $("#metric-intake").textContent = formatAmount(stats.intake);
     $("#metric-day").textContent = formatAmount(stats.dayOutput);
     $("#metric-night").textContent = formatAmount(stats.nightOutput);
@@ -381,8 +498,10 @@
     }
     timeline.innerHTML = entries.map((entry) => {
       const detail = entry.kind === "drink" ? (entry.drink_name || "Getränk") : "Toilettengang";
+      const classification = classifyEntry(entry);
+      const phaseLabel = classification.morningVoid ? "Morgenurin · Nachtmenge" : (classification.phase === "night" ? "Nachtmenge" : "Tagmenge");
       const meta = entry.kind === "urination"
-        ? [isNight(entry.occurred_at) ? "Nachtmenge" : "Tagmenge", entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : "", entry.note || ""].filter(Boolean).join(" · ")
+        ? [phaseLabel, entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : "", entry.note || ""].filter(Boolean).join(" · ")
         : (entry.note || "");
       return `<article class="timeline-item">
         <time class="timeline-time">${formatDate(entry.occurred_at, { hour: "2-digit", minute: "2-digit" })}</time>
@@ -395,7 +514,7 @@
 
   function dayKeys(count) {
     const keys = [];
-    const today = new Date();
+    const today = dateFromKey(currentDiaryDayKey());
     today.setHours(12, 0, 0, 0);
     for (let offset = count - 1; offset >= 0; offset -= 1) {
       const date = new Date(today);
@@ -414,7 +533,7 @@
         <div class="chart-bars"><span class="bar bar-intake" style="height:${Math.max(stats.intake ? 2 : 0, stats.intake / max * 100)}%"></span><span class="bar bar-output" style="height:${Math.max(stats.output ? 2 : 0, stats.output / max * 100)}%"></span></div>
         <span class="chart-label">${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit" })}</span>
       </div>`).join("");
-    $("#comparison-table").innerHTML = [...rows].reverse().map(({ key, stats }) => `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatAmount(stats.output)}</td><td>${stats.visits}</td><td>${formatAmount(stats.average)}</td></tr>`).join("");
+    $("#comparison-table").innerHTML = [...rows].reverse().map(({ key, stats }) => `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatAmount(stats.output)}</td><td>${stats.visits}</td><td>${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td></tr>`).join("");
   }
 
   function renderDoctor() {
@@ -422,17 +541,18 @@
     const to = $("#doctor-to").value;
     if (!from || !to) return;
     const entries = activeEntries().filter((entry) => {
-      const key = localDayKey(entry.occurred_at);
+      const key = classifyEntry(entry).dayKey;
       return key >= from && key <= to;
     }).sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at));
     const total = statsFor(entries);
     const dayCount = Math.max(1, Math.round((dateFromKey(to) - dateFromKey(from)) / 86400000) + 1);
     $("#print-period").textContent = `${formatDate(dateFromKey(from), { day: "2-digit", month: "2-digit", year: "numeric" })} bis ${formatDate(dateFromKey(to), { day: "2-digit", month: "2-digit", year: "numeric" })}`;
-    $("#print-night-period").textContent = `Nachtzeit: ${state.nightStart} bis ${state.nightEnd} Uhr`;
+    $("#print-night-period").textContent = `Nachtmenge inklusive Morgenurin; nächtliche Gänge ohne Morgenurin. Ersatz-Nachtzeit für Tage ohne Schlafdaten: ${state.nightStart} bis ${state.nightEnd} Uhr.`;
     $("#doctor-overview").innerHTML = [
       ["Ø Trinkmenge / Tag", formatAmount(total.intake / dayCount)],
       ["Ø Urinmenge / Tag", formatAmount(total.output / dayCount)],
       ["Toilettengänge gesamt", String(total.visits)],
+      ["Nächtliche Gänge (ohne Morgenurin)", String(total.nightVisits)],
       ["Ø Menge / Gang", formatAmount(total.average)]
     ].map(([label, value]) => `<article class="doctor-stat"><span>${label}</span><strong>${value}</strong></article>`).join("");
 
@@ -444,13 +564,14 @@
       cursor.setDate(cursor.getDate() + 1);
     }
     $("#doctor-days").innerHTML = keys.map((key) => {
-      const stats = statsFor(entries.filter((entry) => localDayKey(entry.occurred_at) === key));
-      return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${stats.visits}</td><td>${formatAmount(stats.average)}</td></tr>`;
+      const stats = statsFor(entries.filter((entry) => classifyEntry(entry).dayKey === key));
+      return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${stats.visits}</td><td>${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td></tr>`;
     }).join("");
     $("#doctor-entries").innerHTML = entries.length ? entries.map((entry) => {
+      const classification = classifyEntry(entry);
       const details = entry.kind === "drink"
         ? (entry.drink_name || "–")
-        : [isNight(entry.occurred_at) ? "Nachtmenge" : "Tagmenge", entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : ""].filter(Boolean).join(" · ");
+        : [classification.morningVoid ? "Morgenurin" : (classification.phase === "night" ? "Nachtmenge" : "Tagmenge"), `Messtag ${formatDate(dateFromKey(classification.dayKey), { day: "2-digit", month: "2-digit" })}`, entry.urgency ? `Harndrang: ${urgencyLabel(entry.urgency)}` : ""].filter(Boolean).join(" · ");
       return `<tr><td>${formatDate(entry.occurred_at, { day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatDate(entry.occurred_at, { hour: "2-digit", minute: "2-digit" })}</td><td>${entry.kind === "drink" ? "Getränk" : "Urinieren"}</td><td>${escapeHtml(details)}</td><td>${formatAmount(entry.amount_ml)}</td><td>${escapeHtml(entry.note || "–")}</td></tr>`;
     }).join("") : '<tr><td colspan="6">Keine Einträge in diesem Zeitraum.</td></tr>';
   }
@@ -464,9 +585,12 @@
       $("#night-settings-status").textContent = "Datenbank-Update nötig: Die Nachtzeit ist noch nicht geräteübergreifend synchronisiert.";
     } else if (state.nightSettingsDirty) {
       $("#night-settings-status").textContent = "Änderung wird synchronisiert …";
+    } else if (nightSettingsSyncAvailable === null) {
+      $("#night-settings-status").textContent = "Synchronisationsstatus wird geprüft …";
     } else {
       $("#night-settings-status").textContent = "Zwischen deinen Geräten synchronisiert und rückwirkend auf alle Einträge angewendet.";
     }
+    renderSleepEvents();
     renderPresets();
     updateAuthUi();
     applyTheme();
@@ -487,6 +611,92 @@
     saveState();
     renderAll();
     void syncData();
+  }
+
+  function sleepEventLabel(kind) {
+    return kind === "sleep_start" ? "Schlafen gegangen" : "Aufgestanden";
+  }
+
+  function renderSleepEvents() {
+    const events = [...activeSleepEvents()].reverse();
+    $("#sleep-event-list").innerHTML = events.length ? events.slice(0, 30).map((event) => `
+      <div class="preset-item">
+        <div class="preset-copy"><strong>${sleepEventLabel(event.kind)}</strong><span>${formatDate(event.occurred_at, { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} Uhr</span></div>
+        <div class="preset-actions">
+          <button type="button" data-edit-sleep-event="${escapeHtml(event.id)}">Bearbeiten</button>
+          <button type="button" data-delete-sleep-event="${escapeHtml(event.id)}">Löschen</button>
+        </div>
+      </div>`).join("") : '<p class="settings-copy">Noch keine Schlaf- oder Aufstehzeit erfasst.</p>';
+    if (!currentUser) {
+      $("#sleep-events-status").textContent = "Derzeit nur auf diesem Gerät gespeichert.";
+    } else if (sleepEventsSyncAvailable === false) {
+      $("#sleep-events-status").textContent = "Datenbank-Update nötig: Schlafzeiten werden noch nicht zwischen Geräten synchronisiert.";
+    } else if (sleepEventsSyncAvailable === null) {
+      $("#sleep-events-status").textContent = "Synchronisationsstatus wird geprüft …";
+    } else {
+      $("#sleep-events-status").textContent = "Schlaf- und Aufstehzeiten werden zwischen deinen Geräten synchronisiert.";
+    }
+  }
+
+  function resetSleepEventForm() {
+    $("#sleep-event-form").reset();
+    $("#sleep-event-edit-id").value = "";
+    $("#sleep-event-kind").value = "sleep_start";
+    setSplitDateTime("#sleep-event-date", "#sleep-event-time");
+    $("#sleep-event-save-button").textContent = "Zeit nachtragen";
+    $("#sleep-event-cancel-button").hidden = true;
+  }
+
+  function saveSleepEvent(kind, occurredAt, existingId = null) {
+    const date = new Date(occurredAt);
+    if (Number.isNaN(date.getTime())) throw new Error("Bitte einen gültigen Zeitpunkt wählen.");
+    const existing = existingId ? state.sleepEvents.find((event) => event.id === existingId) : null;
+    const now = new Date().toISOString();
+    const sleepEvent = {
+      id: existingId || uuid(),
+      kind: kind === "wake_up" ? "wake_up" : "sleep_start",
+      occurred_at: date.toISOString(),
+      created_at: existing?.created_at || now,
+      updated_at: now,
+      deleted_at: null,
+      dirty: true
+    };
+    if (existing) Object.assign(existing, sleepEvent); else state.sleepEvents.push(sleepEvent);
+    saveState();
+    renderAll();
+    void syncData();
+    return sleepEvent;
+  }
+
+  function recordPhaseEvent(kind) {
+    saveSleepEvent(kind, new Date());
+    showToast(kind === "wake_up"
+      ? "Aufgestanden: Der nächste Toilettengang zählt als Morgenurin."
+      : "Schlafphase gestartet.");
+  }
+
+  function beginSleepEventEdit(id) {
+    const event = state.sleepEvents.find((item) => item.id === id && !item.deleted_at);
+    if (!event) return;
+    $("#sleep-event-edit-id").value = event.id;
+    $("#sleep-event-kind").value = event.kind;
+    setSplitDateTime("#sleep-event-date", "#sleep-event-time", new Date(event.occurred_at));
+    $("#sleep-event-save-button").textContent = "Änderungen speichern";
+    $("#sleep-event-cancel-button").hidden = false;
+    $("#sleep-event-form").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function deleteSleepEvent(id) {
+    const event = state.sleepEvents.find((item) => item.id === id && !item.deleted_at);
+    if (!event || !window.confirm(`${sleepEventLabel(event.kind)} wirklich löschen?`)) return;
+    event.deleted_at = new Date().toISOString();
+    event.updated_at = event.deleted_at;
+    event.dirty = true;
+    saveState();
+    resetSleepEventForm();
+    renderAll();
+    void syncData();
+    showToast("Zeitpunkt gelöscht");
   }
 
   function renderAll() {
@@ -634,6 +844,18 @@
     return { id: preset.id, user_id: currentUser.id, name: preset.name, amount_ml: preset.amount_ml, created_at: preset.created_at, updated_at: preset.updated_at, deleted_at: preset.deleted_at };
   }
 
+  function remoteSleepEvent(event) {
+    return {
+      id: event.id,
+      user_id: currentUser.id,
+      kind: event.kind,
+      occurred_at: event.occurred_at,
+      created_at: event.created_at,
+      updated_at: event.updated_at,
+      deleted_at: event.deleted_at
+    };
+  }
+
   function remoteNightSettings() {
     return {
       user_id: currentUser.id,
@@ -658,10 +880,10 @@
     state.nightSettingsDirty = false;
   }
 
-  function isMissingSettingsTable(error) {
+  function isMissingTable(error, table) {
     const message = String(error?.message || "").toLowerCase();
     return error?.code === "PGRST205" || error?.code === "42P01"
-      || (message.includes("user_settings") && (message.includes("does not exist") || message.includes("schema cache")));
+      || (message.includes(table) && (message.includes("does not exist") || message.includes("schema cache")));
   }
 
   function mergeRemote(localItems, remoteItems) {
@@ -684,20 +906,32 @@
     }
   }
 
+  async function fetchOptionalRows(table) {
+    try {
+      return { data: await fetchAllRows(table), error: null };
+    } catch (error) {
+      if (isMissingTable(error, table)) return { data: [], error };
+      throw error;
+    }
+  }
+
   async function syncData() {
     if (syncInProgress || !currentUser || !supabaseClient || !navigator.onLine) return;
     syncInProgress = true;
     setSyncStatus("syncing", "Synchronisiere …");
     try {
-      const [remoteEntries, remotePresets, settingsResult] = await Promise.all([
+      const [remoteEntries, remotePresets, settingsResult, sleepEventsResult] = await Promise.all([
         fetchAllRows("diary_entries"),
         fetchAllRows("drink_presets"),
-        supabaseClient.from("user_settings").select("*").eq("user_id", currentUser.id).maybeSingle()
+        supabaseClient.from("user_settings").select("*").eq("user_id", currentUser.id).maybeSingle(),
+        fetchOptionalRows("sleep_events")
       ]);
-      if (settingsResult.error && !isMissingSettingsTable(settingsResult.error)) throw settingsResult.error;
+      if (settingsResult.error && !isMissingTable(settingsResult.error, "user_settings")) throw settingsResult.error;
       nightSettingsSyncAvailable = !settingsResult.error;
+      sleepEventsSyncAvailable = !sleepEventsResult.error;
       state.entries = mergeRemote(state.entries, remoteEntries.map(normalizeEntry));
       state.presets = mergeRemote(state.presets, remotePresets);
+      if (sleepEventsSyncAvailable) state.sleepEvents = mergeRemote(state.sleepEvents, sleepEventsResult.data);
       if (nightSettingsSyncAvailable) mergeRemoteNightSettings(settingsResult.data);
 
       if (!state.defaultsMaterialized) {
@@ -720,6 +954,12 @@
         if (error) throw error;
         dirtyPresets.forEach((preset) => { preset.dirty = false; });
       }
+      const dirtySleepEvents = state.sleepEvents.filter((event) => event.dirty);
+      if (sleepEventsSyncAvailable && dirtySleepEvents.length) {
+        const { error } = await supabaseClient.from("sleep_events").upsert(dirtySleepEvents.map(remoteSleepEvent));
+        if (error) throw error;
+        dirtySleepEvents.forEach((event) => { event.dirty = false; });
+      }
       if (nightSettingsSyncAvailable && state.nightSettingsDirty) {
         const { error } = await supabaseClient.from("user_settings").upsert(remoteNightSettings());
         if (error) throw error;
@@ -727,12 +967,12 @@
       }
       saveState();
       renderAll();
-      if (nightSettingsSyncAvailable) {
+      if (nightSettingsSyncAvailable && sleepEventsSyncAvailable) {
         setSyncStatus("online", "Synchronisiert");
-        $("#auth-message").textContent = "Einträge, Getränke und Nachtzeit sind synchronisiert.";
+        $("#auth-message").textContent = "Einträge, Getränke, Nachtzeit und Schlafzeiten sind synchronisiert.";
       } else {
         setSyncStatus("error", "Datenbank-Update nötig");
-        $("#auth-message").textContent = "Einträge und Getränke sind synchronisiert. Für die Nachtzeit muss einmal das neue Datenbankschema ausgeführt werden.";
+        $("#auth-message").textContent = "Einträge und Getränke sind synchronisiert. Für Nacht- und Schlafzeiten muss einmal das aktuelle Datenbankschema ausgeführt werden.";
       }
     } catch (error) {
       console.error(error);
@@ -806,7 +1046,7 @@
         inputSchema: { type: "object", properties: {}, additionalProperties: false },
         annotations: { readOnlyHint: true, untrustedContentHint: false },
         execute() {
-          const stats = statsFor(entriesForDay(localDayKey(new Date())));
+          const stats = statsFor(entriesForDay(currentDiaryDayKey()));
           return { intake_ml: stats.intake, urine_day_ml: stats.dayOutput, urine_night_ml: stats.nightOutput, visits: stats.visits, average_ml: Math.round(stats.average) };
         }
       });
@@ -842,8 +1082,11 @@
         if (entryKind === "drink" && !preset) throw new Error("Bitte zuerst ein Getränk anlegen oder auswählen.");
         const urgency = selectedRadioValue("urgency");
         if (entryKind === "urination" && !urgency) throw new Error("Bitte den Harndrang auswählen: leicht, mittel oder stark.");
-        saveEntry({ kind: entryKind, amount_ml: $("#amount").value, occurred_at: combinedDateTime("#occurred-date", "#occurred-time"), drink_name: preset?.name, urgency, note: $("#note").value });
-        showToast(entryKind === "drink" ? "Getränk gespeichert" : "Toilettengang gespeichert");
+        const savedEntry = saveEntry({ kind: entryKind, amount_ml: $("#amount").value, occurred_at: combinedDateTime("#occurred-date", "#occurred-time"), drink_name: preset?.name, urgency, note: $("#note").value });
+        const classification = classifyEntry(savedEntry);
+        showToast(classification.morningVoid
+          ? `Morgenurin gespeichert und Messtag ${formatDate(dateFromKey(classification.dayKey), { day: "2-digit", month: "2-digit" })} zugeordnet.`
+          : (entryKind === "drink" ? "Getränk gespeichert" : "Toilettengang gespeichert"));
         $("#amount").value = "";
         updateQuickAmountSelection();
         setRadioValue("urgency", null);
@@ -880,8 +1123,33 @@
     });
     ["#doctor-from", "#doctor-to"].forEach((id) => $(id).addEventListener("change", renderDoctor));
     $("#print-button").addEventListener("click", () => window.print());
+    $("#sleep-start-button").addEventListener("click", () => recordPhaseEvent("sleep_start"));
+    $("#wake-up-button").addEventListener("click", () => recordPhaseEvent("wake_up"));
+    $("#manage-sleep-events-button").addEventListener("click", () => {
+      navigate("settings");
+      $("#sleep-events-card").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     $("#night-start").addEventListener("change", saveNightSettingsFromForm);
     $("#night-end").addEventListener("change", saveNightSettingsFromForm);
+    $("#sleep-event-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      try {
+        saveSleepEvent(
+          $("#sleep-event-kind").value,
+          combinedDateTime("#sleep-event-date", "#sleep-event-time"),
+          $("#sleep-event-edit-id").value || null
+        );
+        resetSleepEventForm();
+        showToast("Schlafzeit gespeichert");
+      } catch (error) { showToast(error.message); }
+    });
+    $("#sleep-event-list").addEventListener("click", (event) => {
+      const editButton = event.target.closest("[data-edit-sleep-event]");
+      if (editButton) { beginSleepEventEdit(editButton.dataset.editSleepEvent); return; }
+      const deleteButton = event.target.closest("[data-delete-sleep-event]");
+      if (deleteButton) deleteSleepEvent(deleteButton.dataset.deleteSleepEvent);
+    });
+    $("#sleep-event-cancel-button").addEventListener("click", resetSleepEventForm);
     $$('[data-theme-mode]').forEach((button) => button.addEventListener("click", () => setThemeMode(button.dataset.themeMode)));
     $("#theme-toggle").addEventListener("click", () => setThemeMode(resolvedTheme() === "dark" ? "light" : "dark"));
     $("#preset-form").addEventListener("submit", (event) => {
@@ -940,7 +1208,7 @@
       setTimeout(() => URL.revokeObjectURL(link.href), 500);
     });
     $("#clear-button").addEventListener("click", () => {
-      if (!window.confirm("Alle lokalen Einträge und eigenen Standardgetränke auf diesem Gerät löschen?")) return;
+      if (!window.confirm("Alle lokalen Einträge, Schlafzeiten und eigenen Standardgetränke auf diesem Gerät löschen?")) return;
       state = freshState();
       occurredAtManuallySet = false;
       saveState();
@@ -970,14 +1238,20 @@
     $("#today-label").textContent = formatDate(new Date(), { weekday: "long", day: "2-digit", month: "long" });
     refreshCurrentEntryTime(true);
     const today = new Date();
-    const from = new Date(today); from.setDate(today.getDate() - 6);
+    const currentDiaryDay = dateFromKey(currentDiaryDayKey(today));
+    const from = new Date(currentDiaryDay); from.setDate(currentDiaryDay.getDate() - 6);
     $("#doctor-from").value = localDayKey(from);
-    $("#doctor-to").value = localDayKey(today);
+    $("#doctor-to").value = localDayKey(currentDiaryDay);
     renderPresets();
     setKind("drink");
     bindEvents();
+    resetSleepEventForm();
     renderAll();
-    window.setInterval(() => { if (document.visibilityState === "visible") refreshCurrentEntryTime(); }, 15000);
+    window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      refreshCurrentEntryTime();
+      renderPhaseControl();
+    }, 15000);
     registerWebMcpTools();
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(console.error);
     try { await initSupabase(); if (currentUser) await syncData(); } catch (error) { console.error(error); setSyncStatus("error", "Sync nicht verfügbar"); }

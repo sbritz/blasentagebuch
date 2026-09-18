@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=12" />
+    <link rel="stylesheet" href="./app.css?v=13" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=12"></script>
+    <script defer src="./app.js?v=13"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -56,6 +56,18 @@
           </div>
 
           <form id="entry-form" novalidate>
+            <section id="phase-control" class="phase-control" aria-labelledby="phase-label">
+              <div class="phase-copy">
+                <span class="eyebrow">Aktuelle Phase</span>
+                <strong id="phase-label">Tagphase</strong>
+                <span id="phase-help"></span>
+              </div>
+              <div class="phase-actions">
+                <button id="sleep-start-button" class="phase-button sleep" type="button">☾ Schlafen gegangen</button>
+                <button id="wake-up-button" class="phase-button wake" type="button" hidden>☀ Aufgestanden</button>
+                <button id="manage-sleep-events-button" class="inline-action" type="button">Zeiten bearbeiten</button>
+              </div>
+            </section>
             <div id="drink-preset-wrap" class="field">
               <label for="drink-preset">Getränk</label>
               <select id="drink-preset" name="drinkPreset"></select>
@@ -148,7 +160,7 @@
         <section class="table-card">
           <div class="table-scroll">
             <table>
-              <thead><tr><th>Tag</th><th>Getrunken</th><th>Urin Tag</th><th>Urin Nacht</th><th>Urin gesamt</th><th>Gänge</th><th>Ø</th></tr></thead>
+              <thead><tr><th>Messtag</th><th>Getrunken</th><th>Urin Tag</th><th>Urin Nacht</th><th>Urin gesamt</th><th>Gänge</th><th title="Nächtliche Toilettengänge ohne Morgenurin">Nachtgänge</th><th>Ø</th></tr></thead>
               <tbody id="comparison-table"></tbody>
             </table>
           </div>
@@ -174,7 +186,7 @@
           <h3>Tagesübersicht</h3>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>Datum</th><th>Getrunken</th><th>Urin Tag</th><th>Urin Nacht</th><th>Gänge</th><th>Ø</th></tr></thead>
+              <thead><tr><th>Messtag</th><th>Getrunken</th><th>Urin Tag</th><th>Urin Nacht</th><th>Gänge</th><th title="Nächtliche Toilettengänge ohne Morgenurin">Nachtgänge</th><th>Ø</th></tr></thead>
               <tbody id="doctor-days"></tbody>
             </table>
           </div>
@@ -240,12 +252,34 @@
 
         <section class="settings-card">
           <h3>Nachtzeit</h3>
-          <p class="settings-copy">Urinmengen in diesem Zeitraum werden als Nachtmenge gezählt. Änderungen gelten automatisch auch für alle bisherigen Einträge.</p>
+          <p class="settings-copy">Diese Uhrzeiten dienen nur noch als Ersatz für ältere Tage ohne erfasste Schlaf- und Aufstehzeiten. Frühmorgendliche Einträge gehören dabei zum vorherigen Messtag.</p>
           <div class="time-settings">
             <label>Beginn <input id="night-start" type="time" value="22:00" /></label>
             <label>Ende <input id="night-end" type="time" value="06:00" /></label>
           </div>
           <p id="night-settings-status" class="inline-message" role="status"></p>
+        </section>
+
+        <section id="sleep-events-card" class="settings-card">
+          <h3>Schlaf- und Aufstehzeiten</h3>
+          <p class="settings-copy">Für eine medizinisch genauere Auswertung kannst du Zeiten nachtragen oder korrigieren. Der erste Toilettengang nach „Aufgestanden“ wird als Morgenurin der vorherigen Nacht gewertet.</p>
+          <form id="sleep-event-form" class="sleep-event-form">
+            <input id="sleep-event-edit-id" type="hidden" />
+            <div class="field">
+              <label for="sleep-event-kind">Ereignis</label>
+              <select id="sleep-event-kind"><option value="sleep_start">Schlafen gegangen</option><option value="wake_up">Aufgestanden</option></select>
+            </div>
+            <div class="date-time-fields">
+              <label class="date-time-field" for="sleep-event-date"><span>Datum</span><input id="sleep-event-date" type="date" required /></label>
+              <label class="date-time-field" for="sleep-event-time"><span>Uhrzeit</span><input id="sleep-event-time" type="time" step="60" required /></label>
+            </div>
+            <div class="preset-form-actions">
+              <button id="sleep-event-cancel-button" class="text-button" type="button" hidden>Abbrechen</button>
+              <button id="sleep-event-save-button" class="secondary-button" type="submit">Zeit nachtragen</button>
+            </div>
+          </form>
+          <p id="sleep-events-status" class="inline-message" role="status"></p>
+          <div id="sleep-event-list" class="preset-list sleep-event-list"></div>
         </section>
 
         <section class="settings-card danger-zone">
