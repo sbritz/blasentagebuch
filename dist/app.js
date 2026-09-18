@@ -6,6 +6,7 @@
   const URGENCY_MARKER = /^\[\[harndrang:(leicht|mittel|stark)\]\]\s*/i;
   const DEFAULT_NIGHT_START = "22:00";
   const DEFAULT_NIGHT_END = "06:00";
+  const DEFAULT_QUICK_AMOUNTS = [100, 250, 320, 430, 500, 1000];
   const DEFAULT_PRESETS = [
     { id: "builtin-water", default_key: "builtin-water", name: "Wasser", amount_ml: 250, builtIn: true },
     { id: "builtin-coffee", default_key: "builtin-coffee", name: "Kaffee", amount_ml: 200, builtIn: true },
@@ -203,6 +204,31 @@
     });
   }
 
+  function quickAmountOptions(kind = entryKind) {
+    const frequency = new Map();
+    activeEntries().filter((entry) => entry.kind === kind).forEach((entry) => {
+      const amount = Number(entry.amount_ml);
+      if (!Number.isFinite(amount) || amount < 1) return;
+      const previous = frequency.get(amount) || { amount, count: 0, lastUsed: 0 };
+      previous.count += 1;
+      previous.lastUsed = Math.max(previous.lastUsed, new Date(entry.occurred_at).getTime() || 0);
+      frequency.set(amount, previous);
+    });
+    const options = [...frequency.values()].sort((a, b) => b.count - a.count || b.lastUsed - a.lastUsed || a.amount - b.amount);
+    DEFAULT_QUICK_AMOUNTS.forEach((amount) => {
+      if (!frequency.has(amount)) options.push({ amount, count: 0, lastUsed: 0 });
+    });
+    return options.slice(0, 6);
+  }
+
+  function renderQuickAmounts() {
+    $(".quick-amounts").innerHTML = quickAmountOptions().map(({ amount, count }) => {
+      const usage = count ? `${count}× bisher verwendet` : "Standardwert";
+      return `<button type="button" data-amount="${amount}" title="${usage}" aria-label="${amount} Milliliter, ${usage}">${amount}</button>`;
+    }).join("");
+    updateQuickAmountSelection();
+  }
+
   function escapeHtml(value = "") {
     return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
   }
@@ -386,6 +412,7 @@
     $("#urgency-wrap").hidden = kind !== "urination";
     $("#amount").placeholder = kind === "drink" ? "250" : "300";
     $(".primary-button[type='submit']").textContent = kind === "drink" ? "Getränk speichern" : "Toilettengang speichern";
+    renderQuickAmounts();
     refreshCurrentEntryTime();
   }
 
@@ -700,6 +727,7 @@
   }
 
   function renderAll() {
+    renderQuickAmounts();
     renderToday();
     renderComparison();
     renderDoctor();
@@ -1057,7 +1085,12 @@
 
   function bindEvents() {
     $$(".type-option").forEach((button) => button.addEventListener("click", () => setKind(button.dataset.kind)));
-    $$(".quick-amounts button").forEach((button) => button.addEventListener("click", () => { $("#amount").value = button.dataset.amount; updateQuickAmountSelection(); }));
+    $(".quick-amounts").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-amount]");
+      if (!button) return;
+      $("#amount").value = button.dataset.amount;
+      updateQuickAmountSelection();
+    });
     $("#amount").addEventListener("input", updateQuickAmountSelection);
     $("#drink-preset").addEventListener("change", (event) => {
       if (event.target.value === "__add__") {

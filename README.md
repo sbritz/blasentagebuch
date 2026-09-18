@@ -7,7 +7,7 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 - Schnellerfassung für `Getränk` und `Urinieren` mit automatischer, editierbarer Uhrzeit
 - laufend aktualisierte Uhrzeit, solange sie für den aktuellen Eintrag nicht manuell geändert wurde
 - mitgelieferte und eigene Getränketypen, jeweils bearbeitbar
-- individuelle Mengenwahl pro Eintrag mit Schnelltasten und freiem Zahlenfeld
+- individuelle Mengenwahl pro Eintrag mit automatisch an die häufigsten Eingaben angepassten Schnelltasten und freiem Zahlenfeld
 - Harndrang bei jedem Toilettengang in den Stufen leicht, mittel oder stark
 - sicheres Löschen unbenutzter Getränke; verwendete Vorlagen bleiben geschützt
 - medizinische Messtage nach persönlicher Schlaf- und Aufstehzeit statt nach Mitternacht

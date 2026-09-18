@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=13" />
+    <link rel="stylesheet" href="./app.css?v=14" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=13"></script>
+    <script defer src="./app.js?v=14"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -74,13 +74,6 @@
               <button id="manage-drinks-button" class="manage-drinks-button" type="button">＋ Getränke verwalten</button>
             </div>
             <div class="amount-row">
-              <div class="field amount-field">
-                <label for="amount">Eigene Menge</label>
-                <div class="input-suffix">
-                  <input id="amount" name="amount" type="number" min="1" max="5000" step="10" inputmode="numeric" placeholder="250" required />
-                  <span>ml</span>
-                </div>
-              </div>
               <div class="quick-amounts-wrap">
                 <span class="control-label">Schnellauswahl</span>
                 <div class="quick-amounts" aria-label="Schnellauswahl Menge">
@@ -90,6 +83,13 @@
                   <button type="button" data-amount="430">430</button>
                   <button type="button" data-amount="500">500</button>
                   <button type="button" data-amount="1000">1000</button>
+                </div>
+              </div>
+              <div class="field amount-field">
+                <label for="amount">Eigene Menge</label>
+                <div class="input-suffix">
+                  <input id="amount" name="amount" type="number" min="1" max="5000" step="10" inputmode="numeric" placeholder="250" required />
+                  <span>ml</span>
                 </div>
               </div>
             </div>

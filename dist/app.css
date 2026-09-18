@@ -343,7 +343,7 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   .phase-control { flex-direction: row; align-items: center; justify-content: space-between; }
   .phase-actions { justify-content: flex-end; }
   .sleep-event-form { grid-template-columns: minmax(10rem, .75fr) minmax(18rem, 1.5fr) auto; align-items: end; }
-  .amount-row { grid-template-columns: 1fr 1.45fr; }
+  .quick-amounts { grid-template-columns: repeat(6, 1fr); }
   .form-grid { grid-template-columns: 1fr 1fr; }
   .metric-grid { grid-template-columns: repeat(5, 1fr); }
   .metric:last-child { grid-column: auto; }
