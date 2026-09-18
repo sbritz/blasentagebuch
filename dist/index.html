@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=17" />
+    <link rel="stylesheet" href="./app.css?v=18" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=17"></script>
+    <script defer src="./app.js?v=18"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -197,7 +197,7 @@
           </label>
         </div>
         <section class="chart-card" aria-labelledby="chart-heading">
-          <div class="legend"><span><i class="legend-intake"></i> Getränk</span><span><i class="legend-output"></i> Urin</span></div>
+          <div class="legend"><span><i class="legend-intake"></i> Getrunken</span><span><i class="legend-output"></i> Urin Tag</span><span><i class="legend-night"></i> Urin Nacht</span></div>
           <h3 id="chart-heading" class="sr-only">Mengenvergleich je Tag</h3>
           <div id="comparison-chart" class="comparison-chart"></div>
         </section>
@@ -229,9 +229,9 @@
         <section class="chart-card doctor-chart-card" aria-labelledby="doctor-chart-heading">
           <div class="doctor-chart-heading">
             <h3 id="doctor-chart-heading">Mengenverlauf pro Messtag</h3>
-            <div class="legend"><span><i class="legend-intake"></i> Getrunken</span><span><i class="legend-output"></i> Urin gesamt</span></div>
+            <div class="legend"><span><i class="legend-intake"></i> Getrunken</span><span><i class="legend-output"></i> Urin Tag</span><span><i class="legend-night"></i> Urin Nacht</span></div>
           </div>
-          <div id="doctor-chart" class="comparison-chart doctor-chart"></div>
+          <div id="doctor-chart" class="doctor-chart"></div>
         </section>
         <section class="table-card doctor-table-card">
           <h3>Tagesübersicht</h3>

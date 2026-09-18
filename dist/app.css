@@ -272,12 +272,14 @@ html[data-color-scheme="dark"] .timeline-icon.meal { color: #f4bc78; background:
 .legend i { display: inline-block; width: .7rem; height: .7rem; margin-right: .3rem; border-radius: .15rem; }
 .legend-intake { background: var(--blue); }
 .legend-output { background: var(--brand); }
+.legend-night { background: var(--night); }
 .comparison-chart { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(2.6rem, 1fr); align-items: end; gap: .6rem; min-height: 15rem; overflow-x: auto; padding: 1.5rem .2rem 0; border-bottom: 1px solid var(--line); }
 .chart-day { display: grid; grid-template-rows: 11.5rem 2.3rem; gap: .45rem; min-width: 2.6rem; text-align: center; }
 .chart-bars { display: flex; align-items: end; justify-content: center; gap: .2rem; }
-.bar { width: min(42%, 1.35rem); min-height: 2px; border-radius: .28rem .28rem 0 0; transition: height .3s ease; }
+.bar { position: relative; width: min(42%, 1.35rem); min-height: 2px; overflow: hidden; border-radius: .28rem .28rem 0 0; transition: height .3s ease; }
 .bar-intake { background: var(--blue); }
 .bar-output { background: var(--brand); }
+.bar-night-segment { position: absolute; inset: 0 0 auto; background: var(--night); }
 .chart-label { color: var(--muted); font-size: .72rem; white-space: nowrap; }
 .table-card { margin-top: .8rem; box-shadow: none; }
 .table-scroll { overflow-x: auto; }
@@ -299,10 +301,8 @@ th { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-s
 .doctor-chart-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .doctor-chart-heading h3 { margin: 0; font-size: 1rem; }
 .doctor-chart-heading .legend { margin: 0; }
-.doctor-chart { min-height: 13rem; }
-.doctor-chart .chart-day { grid-template-rows: 9.5rem 2.3rem; }
-.doctor-chart.compact { grid-auto-columns: minmax(1.35rem, 1fr); gap: .2rem; }
-.doctor-chart.compact .chart-label { font-size: .62rem; }
+.doctor-chart { min-height: 13rem; overflow-x: auto; padding: .7rem .15rem .25rem; border-bottom: 1px solid var(--line); color: var(--muted); }
+.doctor-chart svg { display: block; width: 100%; height: auto; }
 .urgency-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: .55rem; }
 .urgency-stat { padding: .75rem; border-radius: .8rem; background: var(--surface-soft); }
 .urgency-stat span, .urgency-stat strong { display: block; }
@@ -421,8 +421,9 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   .doctor-stat strong { font-size: 11pt; }
   .doctor-table-card { margin-top: 4mm; padding: 3mm; }
   .doctor-chart-card { margin-top: 4mm; padding: 3mm; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .doctor-chart { min-height: 48mm; padding-top: 3mm; overflow: visible; }
-  .doctor-chart .chart-day { grid-template-rows: 38mm 7mm; }
+  .doctor-chart svg { width: 100%; min-width: 0 !important; }
   .table-scroll { overflow: visible; }
   table { font-size: 7.4pt; }
   th, td { padding: 1.6mm; white-space: normal; }
