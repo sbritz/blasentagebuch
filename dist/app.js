@@ -354,7 +354,13 @@
     const timestamp = occurredAt.getTime();
     const events = activeSleepEvents();
     const latestEvent = [...events].reverse().find((event) => new Date(event.occurred_at).getTime() <= timestamp);
-    if (!latestEvent) return fallbackClassification(occurredAt);
+    if (!latestEvent) {
+      const nextEvent = events.find((event) => new Date(event.occurred_at).getTime() > timestamp);
+      if (nextEvent?.kind === "sleep_start" && localDayKey(nextEvent.occurred_at) === localDayKey(occurredAt)) {
+        return { phase: "day", dayKey: localDayKey(occurredAt), morningVoid: false, source: "event" };
+      }
+      return fallbackClassification(occurredAt);
+    }
 
     const latestEventTime = new Date(latestEvent.occurred_at).getTime();
     const earlierWakes = events.filter((event) => event.kind === "wake_up" && new Date(event.occurred_at).getTime() < latestEventTime);
