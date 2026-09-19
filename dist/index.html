@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=21" />
+    <link rel="stylesheet" href="./app.css?v=22" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=21"></script>
+    <script defer src="./app.js?v=22"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -71,6 +71,13 @@
                 <button id="manage-sleep-events-button" class="inline-action" type="button">Zeiten bearbeiten</button>
               </div>
             </section>
+            <div id="entry-suggestion-wrap" class="field entry-suggestion" hidden>
+              <label for="entry-suggestion">Schnell wiederholen <span>(optional)</span></label>
+              <select id="entry-suggestion">
+                <option value="">Frühere Eingabe auswählen …</option>
+              </select>
+              <small>Übernimmt die früheren Angaben. Du kannst sie vor dem Speichern noch ändern.</small>
+            </div>
             <div id="drink-preset-wrap" class="field">
               <label for="drink-preset">Getränk</label>
               <select id="drink-preset" name="drinkPreset"></select>

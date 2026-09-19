@@ -14,6 +14,8 @@
   --night-soft: #eeedf9;
   --danger: #a13f3f;
   --danger-soft: #fff3f3;
+  --warning: #875515;
+  --warning-soft: #fff2d8;
   --surface-soft: #e7efed;
   --field-bg: #ffffff;
   --field-line: #b9ccc7;
@@ -42,6 +44,8 @@ html[data-color-scheme="dark"] {
   --night-soft: #27253e;
   --danger: #ff9b9b;
   --danger-soft: #321f20;
+  --warning: #f1c274;
+  --warning-soft: #362a17;
   --surface-soft: #1b2a27;
   --field-bg: #101a18;
   --field-line: #3a504b;
@@ -159,6 +163,11 @@ button, select { cursor: pointer; }
 .field { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
 .field label, .compact-field { color: var(--ink); font-size: .88rem; font-weight: 750; }
 .field label span { color: var(--muted); font-weight: 500; }
+.entry-suggestion { margin-bottom: .85rem; }
+.entry-suggestion select { border-color: color-mix(in srgb, var(--brand) 38%, var(--field-line)); background: var(--brand-soft); color: var(--brand-deep); font-weight: 700; }
+.entry-suggestion small { color: var(--muted); font-size: .74rem; line-height: 1.35; }
+.day-status { display: inline-flex; margin-left: .4rem; padding: .12rem .4rem; border-radius: 999px; font-size: .66rem; font-weight: 750; vertical-align: middle; }
+.day-status.incomplete { background: var(--warning-soft); color: var(--warning); }
 .field-label-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 .inline-action { padding: .15rem 0; border: 0; background: transparent; color: var(--brand); font-size: .78rem; font-weight: 750; }
 .date-time-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: .65rem; min-width: 0; width: 100%; }

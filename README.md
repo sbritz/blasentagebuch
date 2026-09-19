@@ -5,6 +5,7 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 ## Enthalten
 
 - Schnellerfassung für `Getränk`, `Urinieren` und frei benannte Mahlzeiten mit automatischer, editierbarer Uhrzeit
+- häufige frühere Eingaben lassen sich bei allen drei Eintragstypen mit „Schnell wiederholen“ vollständig übernehmen und vor dem Speichern anpassen
 - optionale Mahlzeiten-Tags für Fertiggericht, salzig, wasserreich und große Portion
 - laufend aktualisierte Uhrzeit, solange sie für den aktuellen Eintrag nicht manuell geändert wurde
 - mitgelieferte und eigene Getränketypen, jeweils bearbeitbar
@@ -21,6 +22,7 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 - Vergleich für 7, 14 oder 30 Tage
 - Bearbeiten und Löschen mit synchronisierten Löschmarkierungen
 - druckoptimierte Arztansicht für einen frei wählbaren Zeitraum
+- medizinische Durchschnittswerte verwenden nur abgeschlossene Messtage mit Trink- und Urinangaben; laufende oder unvollständige Randtage bleiben sichtbar und werden gekennzeichnet
 - offlinefähige PWA und installierbare App-Oberfläche
 - automatischer sowie manuell wählbarer Hell-/Dunkelmodus
 - Supabase Auth, PostgreSQL und Row Level Security

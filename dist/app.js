@@ -36,6 +36,7 @@
   let syncInProgress = false;
   let installPrompt = null;
   let toastTimer = null;
+  let entrySuggestionCache = [];
   let occurredAtManuallySet = false;
   let nightSettingsSyncAvailable = null;
   let sleepEventsSyncAvailable = null;
@@ -313,6 +314,70 @@
     return activeEntries().filter((entry) => entry.kind === "drink" && normalizedName(entry.drink_name) === name).length;
   }
 
+  function entrySuggestionSignature(entry) {
+    if (entry.kind === "drink") return [normalizedName(entry.drink_name), Number(entry.amount_ml || 0)].join("|");
+    if (entry.kind === "urination") return [Number(entry.amount_ml || 0), entry.urgency || ""].join("|");
+    return [normalizedName(entry.meal_name), [...(entry.tags || [])].sort().join(",")].join("|");
+  }
+
+  function entrySuggestions(kind = entryKind) {
+    const grouped = new Map();
+    activeEntries().filter((entry) => entry.kind === kind).forEach((entry) => {
+      const signature = entrySuggestionSignature(entry);
+      const usedAt = new Date(entry.occurred_at).getTime() || 0;
+      const existing = grouped.get(signature);
+      if (!existing) {
+        grouped.set(signature, { entry, count: 1, lastUsed: usedAt });
+      } else {
+        existing.count += 1;
+        if (usedAt > existing.lastUsed) {
+          existing.entry = entry;
+          existing.lastUsed = usedAt;
+        }
+      }
+    });
+    return [...grouped.values()]
+      .sort((a, b) => b.count - a.count || b.lastUsed - a.lastUsed)
+      .slice(0, 12);
+  }
+
+  function entrySuggestionLabel({ entry, count }) {
+    const suffix = count > 1 ? ` · ${count}× verwendet` : "";
+    if (entry.kind === "drink") return `${entry.drink_name || "Getränk"} · ${formatAmount(entry.amount_ml)}${suffix}`;
+    if (entry.kind === "urination") return `${formatAmount(entry.amount_ml)} · Harndrang ${urgencyLabel(entry.urgency) || "nicht angegeben"}${suffix}`;
+    const tags = (entry.tags || []).map((tag) => MEAL_TAG_LABELS[tag]).filter(Boolean);
+    return `${entry.meal_name || "Mahlzeit"}${tags.length ? ` · ${tags.join(", ")}` : ""}${suffix}`;
+  }
+
+  function renderEntrySuggestions() {
+    entrySuggestionCache = entrySuggestions();
+    const wrap = $("#entry-suggestion-wrap");
+    const select = $("#entry-suggestion");
+    wrap.hidden = entrySuggestionCache.length === 0;
+    select.innerHTML = '<option value="">Frühere Eingabe auswählen …</option>'
+      + entrySuggestionCache.map((suggestion, index) => `<option value="${index}">${escapeHtml(entrySuggestionLabel(suggestion))}</option>`).join("");
+  }
+
+  function applyEntrySuggestion(index) {
+    const suggestion = entrySuggestionCache[Number(index)];
+    if (!suggestion) return;
+    const entry = suggestion.entry;
+    if (entry.kind === "drink") {
+      const preset = activePresets().find((item) => normalizedName(item.name) === normalizedName(entry.drink_name));
+      if (preset) $("#drink-preset").value = preset.id;
+      $("#amount").value = entry.amount_ml || "";
+      updateQuickAmountSelection();
+    } else if (entry.kind === "urination") {
+      $("#amount").value = entry.amount_ml || "";
+      setRadioValue("urgency", entry.urgency || null);
+      updateQuickAmountSelection();
+    } else {
+      $("#meal-name").value = entry.meal_name || "";
+      setCheckboxValues("meal-tags", entry.tags || []);
+    }
+    showToast("Frühere Eingabe übernommen");
+  }
+
   function activeSleepEvents() {
     return state.sleepEvents
       .filter((event) => !event.deleted_at)
@@ -438,6 +503,29 @@
     return { start, wake, basis: wake ? "recorded" : "partial" };
   }
 
+  function completionForDay(dayKey, entries = entriesForDay(dayKey), now = new Date()) {
+    const hasDrink = entries.some((entry) => entry.kind === "drink");
+    const hasUrination = entries.some((entry) => entry.kind === "urination");
+    const sleepWindow = sleepWindowForDay(dayKey);
+    let closed = false;
+    let hasClosingMorningVoid = true;
+
+    if (sleepWindow.basis === "recorded") {
+      closed = now.getTime() >= new Date(sleepWindow.wake.occurred_at).getTime();
+      hasClosingMorningVoid = entries.some((entry) => entry.kind === "urination" && classifyEntry(entry).morningVoid);
+    } else if (sleepWindow.basis === "fallback") {
+      const [startHour, startMinute] = normalizeTimeValue(state.nightStart, DEFAULT_NIGHT_START).split(":").map(Number);
+      const [endHour, endMinute] = normalizeTimeValue(state.nightEnd, DEFAULT_NIGHT_END).split(":").map(Number);
+      const closesAt = dateFromKey(dayKey);
+      if (startHour * 60 + startMinute >= endHour * 60 + endMinute) closesAt.setDate(closesAt.getDate() + 1);
+      closesAt.setHours(endHour, endMinute, 0, 0);
+      closed = now.getTime() >= closesAt.getTime();
+    }
+
+    const complete = closed && hasDrink && hasUrination && hasClosingMorningVoid;
+    return { complete, closed, hasDrink, hasUrination, hasClosingMorningVoid, sleepWindow };
+  }
+
   function statsFor(entries, dayKey = null) {
     const drinks = entries.filter((item) => item.kind === "drink");
     const intake = drinks.reduce((sum, item) => sum + Number(item.amount_ml || 0), 0);
@@ -504,6 +592,7 @@
     $("#amount").placeholder = kind === "drink" ? "250" : "300";
     $("#entry-form .primary-button[type='submit']").textContent = kind === "drink" ? "Getränk speichern" : (kind === "urination" ? "Toilettengang speichern" : "Mahlzeit speichern");
     if (kind !== "meal") renderQuickAmounts();
+    renderEntrySuggestions();
     refreshCurrentEntryTime();
   }
 
@@ -715,11 +804,15 @@
     }
     const dailyRows = keys.map((key) => {
       const dayEntries = entries.filter((entry) => classifyEntry(entry).dayKey === key);
-      return { key, entries: dayEntries, stats: statsFor(dayEntries, key), sleepWindow: sleepWindowForDay(key) };
+      const completion = completionForDay(key, dayEntries);
+      return { key, entries: dayEntries, stats: statsFor(dayEntries, key), sleepWindow: completion.sleepWindow, completion };
     });
     const measuredRows = dailyRows.filter((row) => row.entries.some((entry) => entry.kind === "drink" || entry.kind === "urination"));
-    const measuredDayCount = Math.max(1, measuredRows.length);
-    const total = statsFor(entries);
+    const completeRows = measuredRows.filter((row) => row.completion.complete);
+    const incompleteRows = measuredRows.filter((row) => !row.completion.complete);
+    const completeEntries = completeRows.flatMap((row) => row.entries);
+    const completeDayCount = Math.max(1, completeRows.length);
+    const total = statsFor(completeEntries);
     const recordedWindows = measuredRows.filter((row) => row.sleepWindow.basis === "recorded").length;
     const partialWindows = measuredRows.filter((row) => row.sleepWindow.basis === "partial").length;
     const fallbackWindows = measuredRows.length - recordedWindows - partialWindows;
@@ -729,17 +822,20 @@
       fallbackWindows ? `${fallbackWindows}× Ersatzzeit` : ""
     ].filter(Boolean).join(" · ");
     $("#print-period").textContent = `${formatDate(dateFromKey(from), { day: "2-digit", month: "2-digit", year: "numeric" })} bis ${formatDate(dateFromKey(to), { day: "2-digit", month: "2-digit", year: "numeric" })}`;
-    $("#print-night-period").textContent = `Nachturin inklusive Morgenurin; Nachtgänge ohne Morgenurin, sobald Aufstehzeit erfasst ist. Ersatzzeit: ${state.nightStart} bis ${state.nightEnd} Uhr. Zeitbasis: ${basisParts}.`;
-    $("#doctor-coverage-note").textContent = `Ø über ${measuredRows.length} erfasste${measuredRows.length === 1 ? "n" : ""} Messtag${measuredRows.length === 1 ? "" : "e"}`;
-    $("#doctor-basis-note").textContent = `Zeitbasis der Nachtzuordnung: ${basisParts}. Bei Ersatzzeiten kann der Morgenurin nicht sicher von einem Nachtgang getrennt werden.`;
+    $("#print-night-period").textContent = `Nachturin inklusive Morgenurin; Nachtgänge ohne Morgenurin, sobald Aufstehzeit erfasst ist. Durchschnittswerte nur aus vollständig abgeschlossenen Messtagen. Ersatzzeit: ${state.nightStart} bis ${state.nightEnd} Uhr. Zeitbasis: ${basisParts}.`;
+    $("#doctor-coverage-note").textContent = completeRows.length
+      ? `Ø über ${completeRows.length} vollständige${completeRows.length === 1 ? "n" : ""} Messtag${completeRows.length === 1 ? "" : "e"}${incompleteRows.length ? ` · ${incompleteRows.length} unvollständig ausgeschlossen` : ""}`
+      : "Noch kein vollständiger Messtag im Zeitraum";
+    $("#doctor-basis-note").textContent = `Durchschnittswerte und Harndrang-Auswertung berücksichtigen nur vollständige Messtage. Unvollständige Tage bleiben zur Transparenz sichtbar. Zeitbasis der Nachtzuordnung: ${basisParts}.`;
+    const completeValue = (value) => completeRows.length ? value : "–";
     $("#doctor-overview").innerHTML = [
-      ["Ø Trinkmenge", formatAmount(total.intake / measuredDayCount)],
-      ["Ø Gesamturin", formatAmount(total.output / measuredDayCount)],
-      ["Ø Nachturin", formatAmount(total.nightOutput / measuredDayCount)],
-      ["Nachtanteil", formatPercent(total.nightShare)],
-      ["Ø Nachtgänge", formatCount(total.nightVisits / measuredDayCount)],
-      ["Ø Entleerung", formatAmount(total.average)],
-      ["Max. Entleerung", formatAmount(total.maximum)]
+      ["Ø Trinkmenge", completeValue(formatAmount(total.intake / completeDayCount))],
+      ["Ø Gesamturin", completeValue(formatAmount(total.output / completeDayCount))],
+      ["Ø Nachturin", completeValue(formatAmount(total.nightOutput / completeDayCount))],
+      ["Nachtanteil", completeValue(formatPercent(total.nightShare))],
+      ["Ø Nachtgänge", completeValue(formatCount(total.nightVisits / completeDayCount))],
+      ["Ø Entleerung", completeValue(formatAmount(total.average))],
+      ["Max. Entleerung", completeValue(formatAmount(total.maximum))]
     ].map(([label, value], index) => `<article class="doctor-stat${index === 4 ? " doctor-stat-focus" : ""}"><span>${label}</span><strong>${value}</strong></article>`).join("");
 
     const chartMaximum = Math.max(1, ...dailyRows.flatMap((row) => [row.stats.intake, row.stats.output]));
@@ -750,14 +846,14 @@
     const chartHeight = chartBottom - chartTop;
     const groupWidth = svgWidth / Math.max(1, dailyRows.length);
     const barWidth = Math.min(18, groupWidth * .28);
-    const bars = dailyRows.map(({ key, stats }, index) => {
+    const bars = dailyRows.map(({ key, stats, completion }, index) => {
       const center = groupWidth * index + groupWidth / 2;
       const intakeHeight = stats.intake / chartMaximum * chartHeight;
       const dayHeight = stats.dayOutput / chartMaximum * chartHeight;
       const nightHeight = stats.nightOutput / chartMaximum * chartHeight;
       const label = formatDate(dateFromKey(key), { weekday: "short", day: "2-digit" });
       const fullDate = formatDate(dateFromKey(key), { weekday: "long", day: "2-digit", month: "long" });
-      return `<g>
+      return `<g opacity="${completion.complete ? 1 : .42}">
         <rect x="${center - barWidth - 2}" y="${chartBottom - intakeHeight}" width="${barWidth}" height="${intakeHeight}" rx="3" fill="#3973b9"><title>${fullDate}: ${formatAmount(stats.intake)} getrunken</title></rect>
         <rect x="${center + 2}" y="${chartBottom - dayHeight}" width="${barWidth}" height="${dayHeight}" rx="3" fill="#087267"><title>${fullDate}: ${formatAmount(stats.dayOutput)} Urin Tag</title></rect>
         <rect x="${center + 2}" y="${chartBottom - dayHeight - nightHeight}" width="${barWidth}" height="${nightHeight}" rx="3" fill="#4a497b"><title>${fullDate}: ${formatAmount(stats.nightOutput)} Urin Nacht</title></rect>
@@ -771,8 +867,9 @@
       <line x1="0" y1="${chartBottom}" x2="${svgWidth}" y2="${chartBottom}" stroke="currentColor" stroke-opacity=".35" />
       ${bars}
     </svg>`;
-    $("#doctor-days").innerHTML = measuredRows.length ? measuredRows.map(({ key, stats }) => {
-      return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.output)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatPercent(stats.nightShare)}</td><td>${stats.dayVisits}/${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td><td>${formatAmount(stats.maximum)}</td></tr>`;
+    $("#doctor-days").innerHTML = measuredRows.length ? measuredRows.map(({ key, stats, completion }) => {
+      const status = completion.complete ? "" : '<span class="day-status incomplete">unvollständig</span>';
+      return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}${status}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.output)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatPercent(stats.nightShare)}</td><td>${stats.dayVisits}/${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td><td>${formatAmount(stats.maximum)}</td></tr>`;
     }).join("") : '<tr><td colspan="9">Keine Mengenangaben im gewählten Zeitraum.</td></tr>';
     $("#doctor-urgency").innerHTML = ["leicht", "mittel", "stark"].map((level) => {
       const item = total.urgency[level];
@@ -924,6 +1021,7 @@
 
   function renderAll() {
     renderQuickAmounts();
+    renderEntrySuggestions();
     renderToday();
     renderComparison();
     renderDoctor();
@@ -1337,6 +1435,10 @@
       updateQuickAmountSelection();
     });
     $("#amount").addEventListener("input", updateQuickAmountSelection);
+    $("#entry-suggestion").addEventListener("change", (event) => {
+      if (event.target.value === "") return;
+      applyEntrySuggestion(event.target.value);
+    });
     $("#drink-preset").addEventListener("change", (event) => {
       if (event.target.value === "__add__") {
         openDrinkManagement(true);
@@ -1380,6 +1482,7 @@
         updateQuickAmountSelection();
         setRadioValue("urgency", null);
         $("#note").value = "";
+        $("#entry-suggestion").value = "";
         refreshCurrentEntryTime(true);
       } catch (exception) { error.textContent = exception.message; }
     });
