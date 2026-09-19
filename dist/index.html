@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=18" />
+    <link rel="stylesheet" href="./app.css?v=20" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=18"></script>
+    <script defer src="./app.js?v=20"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -225,19 +225,26 @@
           <p id="print-period"></p>
           <p id="print-night-period"></p>
         </div>
-        <div id="doctor-overview" class="doctor-overview"></div>
+        <section class="doctor-overview-section" aria-labelledby="doctor-overview-heading">
+          <div class="doctor-section-heading">
+            <h3 id="doctor-overview-heading">Ärztlicher Überblick</h3>
+            <span id="doctor-coverage-note"></span>
+          </div>
+          <div id="doctor-overview" class="doctor-overview"></div>
+        </section>
         <section class="chart-card doctor-chart-card" aria-labelledby="doctor-chart-heading">
           <div class="doctor-chart-heading">
-            <h3 id="doctor-chart-heading">Mengenverlauf pro Messtag</h3>
+            <h3 id="doctor-chart-heading">Tagesvergleich</h3>
             <div class="legend"><span><i class="legend-intake"></i> Getrunken</span><span><i class="legend-output"></i> Urin Tag</span><span><i class="legend-night"></i> Urin Nacht</span></div>
           </div>
           <div id="doctor-chart" class="doctor-chart"></div>
         </section>
-        <section class="table-card doctor-table-card">
+        <section class="table-card doctor-table-card doctor-daily-card">
           <h3>Tagesübersicht</h3>
+          <p id="doctor-basis-note" class="doctor-table-note"></p>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>Messtag</th><th>Getrunken</th><th>Nach 20 h</th><th>3 h vor Schlaf</th><th>Urin Tag</th><th>Urin Nacht</th><th>Nachtanteil</th><th>Gänge Tag/Nacht</th><th>Ø</th><th>Max.</th></tr></thead>
+              <thead><tr><th>Messtag</th><th>Getrunken</th><th>Urin gesamt</th><th>Urin Tag</th><th>Urin Nacht</th><th>Nachtanteil</th><th>Gänge Tag/Nacht</th><th>Ø</th><th>Max.</th></tr></thead>
               <tbody id="doctor-days"></tbody>
             </table>
           </div>
@@ -246,7 +253,17 @@
           <h3>Harndrang-Auswertung</h3>
           <div id="doctor-urgency" class="urgency-summary"></div>
         </section>
-        <section class="table-card doctor-table-card">
+        <section class="table-card doctor-table-card doctor-secondary-card">
+          <h3>Zusatzanalyse</h3>
+          <p class="doctor-table-note">Abendliches Trinken und die Zeitbasis der Nachtzuordnung – als ergänzende Information.</p>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Messtag</th><th>Nach 20 Uhr</th><th>3 h vor Schlaf</th><th>Schlafen</th><th>Aufgestanden</th><th>Zeitbasis</th></tr></thead>
+              <tbody id="doctor-additional"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="table-card doctor-table-card doctor-details-start">
           <h3>Tagesfaktoren und Tagesnotizen</h3>
           <div class="table-scroll">
             <table>

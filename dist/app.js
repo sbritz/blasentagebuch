@@ -418,6 +418,20 @@
     return fallback;
   }
 
+  function sleepWindowForDay(dayKey) {
+    const events = activeSleepEvents();
+    const start = events.filter((item) => item.kind === "sleep_start"
+      && classifyEntry({ id: `sleep-${item.id}`, kind: "meal", occurred_at: item.occurred_at }).dayKey === dayKey).at(-1) || null;
+    if (!start) return { start: null, wake: null, basis: "fallback" };
+    const startTime = new Date(start.occurred_at).getTime();
+    const nextStart = events.find((item) => item.kind === "sleep_start" && new Date(item.occurred_at).getTime() > startTime);
+    const nextStartTime = nextStart ? new Date(nextStart.occurred_at).getTime() : Number.POSITIVE_INFINITY;
+    const wake = events.find((item) => item.kind === "wake_up"
+      && new Date(item.occurred_at).getTime() > startTime
+      && new Date(item.occurred_at).getTime() < nextStartTime) || null;
+    return { start, wake, basis: wake ? "recorded" : "partial" };
+  }
+
   function statsFor(entries, dayKey = null) {
     const drinks = entries.filter((item) => item.kind === "drink");
     const intake = drinks.reduce((sum, item) => sum + Number(item.amount_ml || 0), 0);
@@ -686,22 +700,6 @@
       const key = classifyEntry(entry).dayKey;
       return key >= from && key <= to;
     }).sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at));
-    const total = statsFor(entries);
-    const dayCount = Math.max(1, Math.round((dateFromKey(to) - dateFromKey(from)) / 86400000) + 1);
-    $("#print-period").textContent = `${formatDate(dateFromKey(from), { day: "2-digit", month: "2-digit", year: "numeric" })} bis ${formatDate(dateFromKey(to), { day: "2-digit", month: "2-digit", year: "numeric" })}`;
-    $("#print-night-period").textContent = `Nachtmenge inklusive Morgenurin; nächtliche Gänge ohne Morgenurin. Ersatz-Nachtzeit für Tage ohne Schlafdaten: ${state.nightStart} bis ${state.nightEnd} Uhr.`;
-    $("#doctor-overview").innerHTML = [
-      ["Ø Trinken / 24 h", formatAmount(total.intake / dayCount)],
-      ["Ø Urin / 24 h", formatAmount(total.output / dayCount)],
-      ["Ø Nachturin / 24 h", formatAmount(total.nightOutput / dayCount)],
-      ["Nachtanteil im Zeitraum", formatPercent(total.nightShare)],
-      ["Ø Gänge Tag / Nacht je 24 h", `${formatCount(total.dayVisits / dayCount)} / ${formatCount(total.nightVisits / dayCount)}`],
-      ["Ø Entleerung / Gang", formatAmount(total.average)],
-      ["Max. Entleerung im Zeitraum", formatAmount(total.maximum)],
-      ["Ø nach 20 h / 24 h", formatAmount(total.after20 / dayCount)],
-      ["Ø in 3 h vor Schlaf / 24 h", formatAmount(total.beforeSleep / dayCount)]
-    ].map(([label, value]) => `<article class="doctor-stat"><span>${label}</span><strong>${value}</strong></article>`).join("");
-
     const keys = [];
     const cursor = dateFromKey(from);
     const last = dateFromKey(to);
@@ -709,7 +707,35 @@
       keys.push(localDayKey(cursor));
       cursor.setDate(cursor.getDate() + 1);
     }
-    const dailyRows = keys.map((key) => ({ key, stats: statsFor(entries.filter((entry) => classifyEntry(entry).dayKey === key), key) }));
+    const dailyRows = keys.map((key) => {
+      const dayEntries = entries.filter((entry) => classifyEntry(entry).dayKey === key);
+      return { key, entries: dayEntries, stats: statsFor(dayEntries, key), sleepWindow: sleepWindowForDay(key) };
+    });
+    const measuredRows = dailyRows.filter((row) => row.entries.some((entry) => entry.kind === "drink" || entry.kind === "urination"));
+    const measuredDayCount = Math.max(1, measuredRows.length);
+    const total = statsFor(entries);
+    const recordedWindows = measuredRows.filter((row) => row.sleepWindow.basis === "recorded").length;
+    const partialWindows = measuredRows.filter((row) => row.sleepWindow.basis === "partial").length;
+    const fallbackWindows = measuredRows.length - recordedWindows - partialWindows;
+    const basisParts = [
+      recordedWindows ? `${recordedWindows}× individuell` : "",
+      partialWindows ? `${partialWindows}× unvollständig` : "",
+      fallbackWindows ? `${fallbackWindows}× Ersatzzeit` : ""
+    ].filter(Boolean).join(" · ");
+    $("#print-period").textContent = `${formatDate(dateFromKey(from), { day: "2-digit", month: "2-digit", year: "numeric" })} bis ${formatDate(dateFromKey(to), { day: "2-digit", month: "2-digit", year: "numeric" })}`;
+    $("#print-night-period").textContent = `Nachturin inklusive Morgenurin; Nachtgänge ohne Morgenurin, sobald Aufstehzeit erfasst ist. Ersatzzeit: ${state.nightStart} bis ${state.nightEnd} Uhr. Zeitbasis: ${basisParts}.`;
+    $("#doctor-coverage-note").textContent = `Ø über ${measuredRows.length} erfasste${measuredRows.length === 1 ? "n" : ""} Messtag${measuredRows.length === 1 ? "" : "e"}`;
+    $("#doctor-basis-note").textContent = `Zeitbasis der Nachtzuordnung: ${basisParts}. Bei Ersatzzeiten kann der Morgenurin nicht sicher von einem Nachtgang getrennt werden.`;
+    $("#doctor-overview").innerHTML = [
+      ["Ø Trinkmenge", formatAmount(total.intake / measuredDayCount)],
+      ["Ø Gesamturin", formatAmount(total.output / measuredDayCount)],
+      ["Ø Nachturin", formatAmount(total.nightOutput / measuredDayCount)],
+      ["Nachtanteil", formatPercent(total.nightShare)],
+      ["Ø Nachtgänge", formatCount(total.nightVisits / measuredDayCount)],
+      ["Ø Entleerung", formatAmount(total.average)],
+      ["Max. Entleerung", formatAmount(total.maximum)]
+    ].map(([label, value], index) => `<article class="doctor-stat${index === 4 ? " doctor-stat-focus" : ""}"><span>${label}</span><strong>${value}</strong></article>`).join("");
+
     const chartMaximum = Math.max(1, ...dailyRows.flatMap((row) => [row.stats.intake, row.stats.output]));
     const doctorChart = $("#doctor-chart");
     const svgWidth = Math.max(700, dailyRows.length * 52);
@@ -739,13 +765,19 @@
       <line x1="0" y1="${chartBottom}" x2="${svgWidth}" y2="${chartBottom}" stroke="currentColor" stroke-opacity=".35" />
       ${bars}
     </svg>`;
-    $("#doctor-days").innerHTML = dailyRows.map(({ key, stats }) => {
-      return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.after20)}</td><td>${formatAmount(stats.beforeSleep)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatPercent(stats.nightShare)}</td><td>${stats.dayVisits}/${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td><td>${formatAmount(stats.maximum)}</td></tr>`;
-    }).join("");
+    $("#doctor-days").innerHTML = measuredRows.length ? measuredRows.map(({ key, stats }) => {
+      return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.output)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatPercent(stats.nightShare)}</td><td>${stats.dayVisits}/${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td><td>${formatAmount(stats.maximum)}</td></tr>`;
+    }).join("") : '<tr><td colspan="9">Keine Mengenangaben im gewählten Zeitraum.</td></tr>';
     $("#doctor-urgency").innerHTML = ["leicht", "mittel", "stark"].map((level) => {
       const item = total.urgency[level];
       return `<article class="urgency-stat"><span>${urgencyLabel(level)}</span><strong>${item.count}× · Ø ${formatAmount(item.average)}</strong></article>`;
     }).join("");
+    $("#doctor-additional").innerHTML = measuredRows.length ? measuredRows.map(({ key, stats, sleepWindow }) => {
+      const sleepTime = sleepWindow.start ? formatDate(sleepWindow.start.occurred_at, { hour: "2-digit", minute: "2-digit" }) : state.nightStart;
+      const wakeTime = sleepWindow.wake ? formatDate(sleepWindow.wake.occurred_at, { hour: "2-digit", minute: "2-digit" }) : state.nightEnd;
+      const basis = sleepWindow.basis === "recorded" ? "Individuell" : (sleepWindow.basis === "partial" ? "Unvollständig" : "Ersatzzeit");
+      return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.after20)}</td><td>${formatAmount(stats.beforeSleep)}</td><td>${sleepTime} Uhr</td><td>${wakeTime} Uhr</td><td><span class="basis-badge ${sleepWindow.basis}">${basis}</span></td></tr>`;
+    }).join("") : '<tr><td colspan="6">Keine Zusatzdaten im gewählten Zeitraum.</td></tr>';
     const contexts = activeDailyContexts().filter((context) => context.day_key >= from && context.day_key <= to && (context.note || context.tags.length));
     $("#doctor-contexts").innerHTML = contexts.length ? contexts.sort((a, b) => a.day_key.localeCompare(b.day_key)).map((context) => `
       <tr><td>${formatDate(dateFromKey(context.day_key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${escapeHtml(context.tags.map((tag) => DAILY_TAG_LABELS[tag]).filter(Boolean).join(", ") || "–")}</td><td>${escapeHtml(context.note || "–")}</td></tr>`).join("") : '<tr><td colspan="3">Keine Tagesfaktoren oder Tagesnotizen in diesem Zeitraum.</td></tr>';
@@ -773,7 +805,7 @@
     } else if (nightSettingsSyncAvailable === null) {
       $("#night-settings-status").textContent = "Synchronisationsstatus wird geprüft …";
     } else {
-      $("#night-settings-status").textContent = "Zwischen deinen Geräten synchronisiert und rückwirkend auf alle Einträge angewendet.";
+      $("#night-settings-status").textContent = "Zwischen deinen Geräten synchronisiert. Sie gilt als Ersatzzeit für Messtage ohne individuelle Schlafzeiten.";
     }
     renderSleepEvents();
     renderPresets();

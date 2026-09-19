@@ -292,11 +292,17 @@ th { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-s
 .doctor-controls label, .time-settings label { color: var(--muted); font-size: .82rem; font-weight: 700; }
 .doctor-controls input { width: auto; min-height: 2.7rem; margin-left: .3rem; }
 .print-title { display: none; }
+.doctor-overview-section { padding: 1rem; border: 1px solid var(--line); border-radius: 1.1rem; background: linear-gradient(145deg, var(--paper), var(--surface-soft)); box-shadow: var(--shadow-soft); }
+.doctor-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: .8rem; }
+.doctor-section-heading h3 { margin: 0; font-size: 1rem; }
+.doctor-section-heading span { color: var(--muted); font-size: .76rem; }
 .doctor-overview { display: grid; grid-template-columns: repeat(2, 1fr); gap: .65rem; }
 .doctor-stat { padding: .85rem; border: 1px solid var(--line); border-radius: .9rem; background: var(--field-bg); }
 .doctor-stat span { display: block; color: var(--muted); font-size: .78rem; }
 .doctor-stat strong { display: block; margin-top: .25rem; font-size: 1.15rem; }
+.doctor-stat-focus { border-color: color-mix(in srgb, var(--night) 45%, var(--line)); background: color-mix(in srgb, var(--night) 8%, var(--field-bg)); }
 .doctor-table-card h3 { margin: 0 0 .6rem; font-size: 1rem; }
+.doctor-table-note { margin: -.2rem 0 .75rem; color: var(--muted); font-size: .78rem; line-height: 1.4; }
 .doctor-chart-card { margin-top: .8rem; }
 .doctor-chart-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .doctor-chart-heading h3 { margin: 0; font-size: 1rem; }
@@ -308,6 +314,11 @@ th { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-s
 .urgency-stat span, .urgency-stat strong { display: block; }
 .urgency-stat span { color: var(--muted); font-size: .78rem; }
 .urgency-stat strong { margin-top: .2rem; }
+.doctor-secondary-card { background: var(--surface-soft); }
+.doctor-secondary-card table { font-size: .8rem; }
+.basis-badge { display: inline-block; padding: .2rem .45rem; border-radius: 999px; background: var(--brand-soft); color: var(--brand-deep); font-size: .7rem; font-weight: 800; }
+.basis-badge.fallback { background: color-mix(in srgb, var(--night) 12%, var(--field-bg)); color: var(--night); }
+.basis-badge.partial { background: color-mix(in srgb, var(--danger) 10%, var(--field-bg)); color: var(--danger); }
 
 .settings-card + .settings-card { margin-top: .8rem; }
 .settings-card h3 { margin: 0 0 .35rem; font-size: 1.05rem; }
@@ -382,6 +393,8 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
 @media (max-width: 36rem) {
   .timeline-item { grid-template-columns: 3.2rem 2.35rem minmax(0, 1fr); }
   .timeline-actions { grid-column: 3 / -1; justify-content: space-between; }
+  .doctor-section-heading, .doctor-chart-heading { align-items: flex-start; flex-direction: column; gap: .45rem; }
+  .doctor-chart-heading .legend { justify-content: flex-start; flex-wrap: wrap; }
 }
 
 @media (max-width: 30rem) {
@@ -414,6 +427,8 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   .print-title { display: block; margin-bottom: 5mm; }
   .print-title h2 { margin: 0 0 1mm; font-size: 17pt; }
   .print-title p { margin: 0; }
+  .doctor-overview-section { padding: 3mm; box-shadow: none; border-color: #aaa; border-radius: 2mm; }
+  .doctor-section-heading { margin-bottom: 2mm; }
   .doctor-overview { grid-template-columns: repeat(4, 1fr); gap: 2mm; }
   .urgency-summary { grid-template-columns: repeat(3, 1fr); }
   .doctor-stat, .table-card, .doctor-chart-card { break-inside: avoid; box-shadow: none; border-color: #aaa; border-radius: 2mm; }
@@ -424,6 +439,10 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .doctor-chart { min-height: 48mm; padding-top: 3mm; overflow: visible; }
   .doctor-chart svg { width: 100%; min-width: 0 !important; }
+  .doctor-chart-card { break-after: page; }
+  .doctor-details-start { break-before: page; }
+  .doctor-secondary-card { background: #f5f7f6; }
+  .basis-badge { border: 1px solid #999; background: #fff !important; color: #222 !important; }
   .table-scroll { overflow: visible; }
   table { font-size: 7.4pt; }
   th, td { padding: 1.6mm; white-space: normal; }
