@@ -1,5 +1,5 @@
-const CACHE = "blasentagebuch-v26";
-const APP_SHELL = ["./", "./index.html", "./app.css?v=26", "./app.js?v=26", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
+const CACHE = "blasentagebuch-v27";
+const APP_SHELL = ["./", "./index.html", "./app.css?v=27", "./app.js?v=27", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));

@@ -206,6 +206,7 @@ html[data-color-scheme="dark"] .capture-card[data-kind="meal"] { --mode: #f1b973
 .field { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
 .field label, .compact-field { color: var(--ink); font-size: .88rem; font-weight: 750; }
 .field label span { color: var(--muted); font-weight: 500; }
+.field > small { color: var(--muted); font-size: .74rem; line-height: 1.35; }
 .entry-suggestion { margin-bottom: .9rem; }
 .entry-suggestion select { border-color: color-mix(in srgb, var(--brand) 38%, var(--field-line)); background: var(--brand-soft); color: var(--brand-deep); font-weight: 700; }
 .day-status { display: inline-flex; margin-left: .4rem; padding: .12rem .4rem; border-radius: 999px; font-size: .66rem; font-weight: 750; vertical-align: middle; }
