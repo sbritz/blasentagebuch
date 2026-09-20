@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=25" />
+    <link rel="stylesheet" href="./app.css?v=26" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=25"></script>
+    <script defer src="./app.js?v=26"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -354,7 +354,7 @@
           <div id="vessel-list" class="vessel-list"></div>
           <form id="vessel-form" class="vessel-form">
             <div class="field"><label for="vessel-name">Name</label><input id="vessel-name" maxlength="40" placeholder="z. B. großes Wasserglas" required /></div>
-            <div class="field"><label for="vessel-amount">Füllmenge</label><div class="input-suffix"><input id="vessel-amount" type="number" min="10" max="5000" step="10" inputmode="numeric" placeholder="430" required /><span>ml</span></div></div>
+            <div class="field"><label for="vessel-amount">Füllmenge</label><div class="input-suffix"><input id="vessel-amount" type="number" min="10" max="5000" step="1" inputmode="numeric" placeholder="z. B. 265" required /><span>ml</span></div></div>
             <div class="field"><label for="vessel-photo">Foto</label><input id="vessel-photo" type="file" accept="image/*" capture="environment" required /></div>
             <img id="vessel-preview" class="vessel-preview" alt="Vorschau des Trinkgefäßes" hidden />
             <button class="secondary-button" type="submit">Gefäß speichern</button>
