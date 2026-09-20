@@ -8,8 +8,9 @@
   const DEFAULT_NIGHT_END = "06:00";
   const DEFAULT_QUICK_AMOUNTS = [100, 250, 320, 430, 500, 1000];
   const MEAL_NAME_MAX_LENGTH = 500;
-  const MEAL_TAG_LABELS = { prepared: "Fertiggericht", salty: "Salzig", water_rich: "Wasserreich", large_portion: "Große Portion" };
+  const MEAL_TAG_LABELS = { prepared: "Fertiggericht", salty: "Salzig", water_rich: "Wasserreich", large_portion: "Große Portion", sweet: "Süß", late_meal: "Spät gegessen" };
   const DAILY_TAG_LABELS = { cold: "Kältegefühl", kidney_belt: "Nierengurt", sport: "Sport", sweating: "Stark geschwitzt", stress: "Stress" };
+  const Analysis = window.BladderAnalysis;
   const DEFAULT_PRESETS = [
     { id: "builtin-water", default_key: "builtin-water", name: "Wasser", amount_ml: 250, builtIn: true },
     { id: "builtin-coffee", default_key: "builtin-coffee", name: "Kaffee", amount_ml: 200, builtIn: true },
@@ -611,6 +612,117 @@
     };
   }
 
+  function analysisMetricsForDay(dayKey) {
+    if (!Analysis) return null;
+    const entries = entriesForDay(dayKey);
+    if (!completionForDay(dayKey, entries).complete) return null;
+    const preparedEntries = entries.map((entry) => {
+      if (entry.kind !== "urination") return entry;
+      const classification = classifyEntry(entry);
+      return { ...entry, phase: classification.phase, morningVoid: classification.morningVoid };
+    });
+    const context = activeDailyContexts().find((item) => item.day_key === dayKey) || { tags: [] };
+    return Analysis.computeDayMetrics({
+      dayKey,
+      entries: preparedEntries,
+      sleepAt: sleepStartForDay(dayKey).toISOString(),
+      context
+    });
+  }
+
+  function analysisDaysForKeys(keys) {
+    return keys.map(analysisMetricsForDay).filter(Boolean);
+  }
+
+  function formatDecimal(value, digits = 1) {
+    return Number.isFinite(value) ? new Intl.NumberFormat("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value) : "–";
+  }
+
+  function formatDuration(value) {
+    if (!Number.isFinite(value)) return "–";
+    const minutes = Math.round(value);
+    if (minutes < 60) return `${minutes} Min.`;
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    return remainder ? `${hours} Std. ${remainder} Min.` : `${hours} Std.`;
+  }
+
+  function formatOptionalAmount(value) {
+    return Number.isFinite(value) ? formatAmount(value) : "–";
+  }
+
+  function signedValue(value, formatter) {
+    if (!Number.isFinite(value)) return "–";
+    return `${value > 0 ? "+" : ""}${formatter(value)}`;
+  }
+
+  function correlationDescription(value) {
+    if (!Number.isFinite(value)) return "nicht berechenbar";
+    const strength = Math.abs(value) < .3 ? "schwach" : (Math.abs(value) < .7 ? "mittel" : "stark");
+    const direction = value < 0 ? "gegenläufig" : "gleichläufig";
+    return `r = ${formatDecimal(value, 2)} · ${strength}, ${direction}`;
+  }
+
+  function renderContinuousAnalysis(label, stats, xLabel, yLabel, xFormatter, yFormatter) {
+    return `<article class="pattern-result">
+      <h4>${escapeHtml(label)}</h4>
+      <p class="pattern-correlation">Pearson: <strong>${correlationDescription(stats.correlation)}</strong> <span>(${stats.count} Messtage)</span></p>
+      <dl class="pattern-values">
+        <div><dt>${escapeHtml(xLabel)}</dt><dd>Ø ${xFormatter(stats.xMean)} · Median ${xFormatter(stats.xMedian)}</dd></div>
+        <div><dt>${escapeHtml(yLabel)}</dt><dd>Ø ${yFormatter(stats.yMean)} · Median ${yFormatter(stats.yMedian)}</dd></div>
+      </dl>
+    </article>`;
+  }
+
+  function renderTagOutcome(label, result, formatter, differenceFormatter = formatter) {
+    if (!result.withCount || !result.withoutCount) {
+      return `<p><strong>${escapeHtml(label)}:</strong> Vergleich erst möglich, wenn Messtage mit und ohne Merkmal vorliegen.</p>`;
+    }
+    return `<p><strong>${escapeHtml(label)}:</strong> mit Merkmal Ø ${formatter(result.withMean)} / Median ${formatter(result.withMedian)}; ohne Ø ${formatter(result.withoutMean)} / Median ${formatter(result.withoutMedian)}. Differenz ${signedValue(result.absoluteDifference, differenceFormatter)} (${signedValue(result.percentageDifference, (value) => `${formatDecimal(value)} %`)}).</p>`;
+  }
+
+  function renderTagAnalysis(title, comparisons, labels) {
+    const used = comparisons.filter((comparison) => comparison.outcomes.nightUrineMl.withCount > 0);
+    if (!used.length) return `<section class="pattern-group"><h4>${escapeHtml(title)}</h4><p class="muted">Noch keine markierten Messtage im gewählten Zeitraum.</p></section>`;
+    return `<section class="pattern-group"><h4>${escapeHtml(title)}</h4><div class="pattern-tag-list">${used.map((comparison) => {
+      const nightUrine = comparison.outcomes.nightUrineMl;
+      const nightVisits = comparison.outcomes.nightVisits;
+      const nightShare = comparison.outcomes.nightSharePercent;
+      return `<article class="pattern-tag-result"><div class="pattern-tag-title"><strong>${escapeHtml(labels[comparison.tag] || comparison.tag)}</strong><span>${nightUrine.withCount} mit · ${nightUrine.withoutCount} ohne</span></div>${renderTagOutcome("Nachturin", nightUrine, formatAmount)}${renderTagOutcome("Nachtanteil", nightShare, (value) => `${formatDecimal(value)} %`, (value) => `${formatDecimal(value)} Prozentpunkte`)}${renderTagOutcome("Nachtgänge", nightVisits, (value) => formatDecimal(value))}</article>`;
+    }).join("")}</div></section>`;
+  }
+
+  function renderPatternAnalysis(days, containerSelector, countSelector) {
+    const container = $(containerSelector);
+    const count = $(countSelector);
+    if (!container || !count || !Analysis) return;
+    count.textContent = `${days.length} vollständige${days.length === 1 ? "r" : ""} Messtag${days.length === 1 ? "" : "e"}`;
+    if (days.length < 2) {
+      container.innerHTML = '<div class="empty-state compact"><strong>Noch zu wenig Vergleichsdaten</strong>Für Mittelwert- und Medianvergleiche werden mindestens zwei vollständige Messtage benötigt; eine Korrelation braucht mindestens drei variierende Wertepaare.</div>';
+      return;
+    }
+    const result = Analysis.analyzePatterns(days, { mealTags: Object.keys(MEAL_TAG_LABELS), dailyFactors: Object.keys(DAILY_TAG_LABELS) });
+    container.innerHTML = `<section class="pattern-group pattern-continuous"><h4>Kontinuierliche Werte</h4><div class="pattern-result-grid">
+      ${renderContinuousAnalysis("Trinken vor dem Schlafen ↔ Nachturin", result.continuous.lateIntakeNightUrine, "Trinken in 3 h vor Schlaf", "Nachturin", formatAmount, formatAmount)}
+      ${renderContinuousAnalysis("Trinken vor dem Schlafen ↔ Nachtgänge", result.continuous.lateIntakeNightVisits, "Trinken in 3 h vor Schlaf", "Nachtgänge", formatAmount, formatDecimal)}
+      ${renderContinuousAnalysis("Gesamt-Trinkmenge ↔ Gesamt-Urinmenge", result.continuous.intakeUrine, "Getrunken", "Urin gesamt", formatAmount, formatAmount)}
+    </div></section>
+    ${renderTagAnalysis("Mahlzeiten-Merkmale", result.mealTags, MEAL_TAG_LABELS)}
+    ${renderTagAnalysis("Tagesfaktoren", result.dailyFactors, DAILY_TAG_LABELS)}`;
+  }
+
+  function renderAnalysisDayTable(days) {
+    const table = $("#comparison-analysis-days");
+    if (!table) return;
+    table.innerHTML = days.length ? [...days].reverse().map((day) => `<tr>
+      <td>${formatDate(dateFromKey(day.dayKey), { weekday: "short", day: "2-digit", month: "2-digit" })}</td>
+      <td>${formatAmount(day.intakeMl)}</td><td>${formatAmount(day.totalUrineMl)}</td><td>${formatAmount(day.nightUrineMl)}</td><td>${formatPercent(day.nightSharePercent)}</td>
+      <td>${day.dayVisits}/${day.nightVisits}</td><td>${formatOptionalAmount(day.averageVoidMl)}</td><td>${formatOptionalAmount(day.maximumVoidMl)}</td>
+      <td>${formatOptionalAmount(day.urgency.leicht.averageMl)}</td><td>${formatOptionalAmount(day.urgency.mittel.averageMl)}</td><td>${formatOptionalAmount(day.urgency.stark.averageMl)}</td>
+      <td>${formatAmount(day.beforeSleep3hMl)}</td><td>${formatDuration(day.minutesLastMealToSleep)}</td><td>${formatDuration(day.minutesLastLargeDrinkToSleep)}</td>
+    </tr>`).join("") : '<tr><td colspan="14">Noch keine vollständigen Messtage im gewählten Zeitraum.</td></tr>';
+  }
+
   function entriesForDay(key) {
     return activeEntries().filter((entry) => classifyEntry(entry).dayKey === key);
   }
@@ -987,7 +1099,8 @@
 
   function renderComparison() {
     const count = Number($("#compare-days").value || 7);
-    const rows = dayKeys(count).map((key) => ({ key, stats: statsFor(entriesForDay(key), key) }));
+    const keys = dayKeys(count);
+    const rows = keys.map((key) => ({ key, stats: statsFor(entriesForDay(key), key) }));
     const max = Math.max(1, ...rows.flatMap((row) => [row.stats.intake, row.stats.output]));
     $("#comparison-chart").innerHTML = rows.map(({ key, stats }) => `
       <div class="chart-day" title="${formatDate(dateFromKey(key), { weekday: "long", day: "2-digit", month: "long" })}: ${formatAmount(stats.intake)} getrunken, ${formatAmount(stats.dayOutput)} Urin Tag, ${formatAmount(stats.nightOutput)} Urin Nacht">
@@ -995,6 +1108,9 @@
         <span class="chart-label">${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit" })}</span>
       </div>`).join("");
     $("#comparison-table").innerHTML = [...rows].reverse().map(({ key, stats }) => `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.beforeSleep)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatPercent(stats.nightShare)}</td><td>${stats.dayVisits}/${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td><td>${formatAmount(stats.maximum)}</td></tr>`).join("");
+    const analysisDays = analysisDaysForKeys(keys);
+    renderPatternAnalysis(analysisDays, "#comparison-pattern-analysis", "#comparison-pattern-count");
+    renderAnalysisDayTable(analysisDays);
   }
 
   function renderDoctor() {
@@ -1085,6 +1201,7 @@
       const item = total.urgency[level];
       return `<article class="urgency-stat"><span>${urgencyLabel(level)}</span><strong>${item.count}× · Ø Urin ${formatAmount(item.average)}</strong></article>`;
     }).join("");
+    renderPatternAnalysis(analysisDaysForKeys(completeRows.map((row) => row.key)), "#doctor-pattern-analysis", "#doctor-pattern-count");
     $("#doctor-additional").innerHTML = measuredRows.length ? measuredRows.map(({ key, stats, sleepWindow }) => {
       const sleepTime = sleepWindow.start ? formatDate(sleepWindow.start.occurred_at, { hour: "2-digit", minute: "2-digit" }) : state.nightStart;
       const wakeTime = sleepWindow.wake ? formatDate(sleepWindow.wake.occurred_at, { hour: "2-digit", minute: "2-digit" }) : state.nightEnd;

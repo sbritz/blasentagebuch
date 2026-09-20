@@ -9,7 +9,7 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 - wischbare Tagesansicht mit farbigem Wochentag, feststehendem Datum sowie Bearbeiten und Löschen vergangener Einträge
 - klar farbcodierte Eingabemodi für Trinken, Urinieren und Essen
 - eigene Trinkgefäße mit komprimiertem Foto und fester Füllmenge als Ein-Klick-Auswahl
-- optionale Mahlzeiten-Tags für Fertiggericht, salzig, wasserreich und große Portion
+- optionale Mahlzeiten-Tags für Fertiggericht, salzig, wasserreich, große Portion, süß und spät gegessen
 - laufend aktualisierte Uhrzeit, solange sie für den aktuellen Eintrag nicht manuell geändert wurde
 - mitgelieferte und eigene Getränketypen, jeweils bearbeitbar
 - individuelle Mengenwahl über ein klares Zahlenfeld sowie Fotoauswahl gespeicherter Trinkgefäße
@@ -18,8 +18,11 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 - medizinische Messtage nach persönlicher Schlaf- und Aufstehzeit statt nach Mitternacht
 - Morgenurin als Abschluss der vorherigen Nachtmenge, getrennt von den eigentlichen Nachtgängen
 - Tages-/Nachtmengen, Nachtanteil, Tag-/Nachtgänge, Durchschnitt und maximale Einzelentleerung
-- Auswertung der Flüssigkeitsmenge nach 20 Uhr und in den letzten drei Stunden vor dem Schlafengehen
+- Auswertung der Flüssigkeitsmenge in den letzten drei Stunden vor dem Schlafengehen
 - Harndrang-Auswertung nach Stufe mit Anzahl und Durchschnittsmenge
+- deterministische Musteranalyse ohne externe KI/API: Mittelwert, Median, Differenzen und Pearson-Korrelationen für vollständige Messtage
+- Vergleich von spätem Trinken, Trink-/Urin-Gesamtmengen, Mahlzeiten-Merkmalen und Tagesfaktoren mit Nachturin und Nachtgängen
+- berechnete Zeitabstände zwischen Schlaf und letzter Mahlzeit beziehungsweise letzter einzelner Getränkeaufnahme ab 300 ml
 - Tagesfaktoren und freie Tagesnotiz, geräteübergreifend synchronisiert
 - geräteübergreifend synchronisierte Schlaf-/Aufstehzeiten und Ersatz-Nachtzeit mit rückwirkender Neuberechnung aller Einträge
 - Vergleich für 7, 14 oder 30 Tage
@@ -40,6 +43,14 @@ python3 -m http.server 4173 -d dist
 ```
 
 Danach `http://localhost:4173` aufrufen. Ohne Supabase bleiben die Daten ausschließlich im Browser dieses Geräts.
+
+## Tests
+
+Die pure Berechnungslogik der Musteranalyse liegt getrennt vom UI in `dist/analysis.js`. Die zentralen Statistik- und Tagesberechnungen lassen sich ohne Browser ausführen:
+
+```bash
+node --test tests/analysis.test.js
+```
 
 ## Supabase einrichten
 

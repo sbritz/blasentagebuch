@@ -393,6 +393,34 @@ th { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-s
 .basis-badge.fallback { background: color-mix(in srgb, var(--night) 12%, var(--field-bg)); color: var(--night); }
 .basis-badge.partial { background: color-mix(in srgb, var(--danger) 10%, var(--field-bg)); color: var(--danger); }
 
+.pattern-analysis-card { margin-top: .8rem; padding: 1rem; border: 1px solid var(--line); border-radius: 1.1rem; background: var(--paper); box-shadow: var(--shadow-soft); }
+.pattern-analysis-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
+.pattern-analysis-heading h3 { margin: 0; font-size: 1.12rem; }
+.analysis-count { flex: 0 0 auto; color: var(--muted); font-size: .76rem; font-weight: 700; }
+.analysis-disclaimer { margin: .6rem 0 1rem; padding: .7rem .8rem; border-radius: .75rem; background: var(--surface-soft); color: var(--muted); font-size: .8rem; line-height: 1.45; }
+.pattern-analysis { display: grid; gap: 1rem; }
+.pattern-group > h4 { margin: 0 0 .65rem; font-size: .92rem; }
+.pattern-result-grid { display: grid; gap: .65rem; }
+.pattern-result { padding: .8rem; border: 1px solid var(--line); border-radius: .85rem; background: var(--field-bg); }
+.pattern-result h4 { margin: 0 0 .4rem; font-size: .88rem; }
+.pattern-correlation { margin: 0 0 .55rem; color: var(--muted); font-size: .78rem; }
+.pattern-correlation strong { color: var(--brand-deep); }
+.pattern-values { display: grid; gap: .35rem; margin: 0; }
+.pattern-values div { display: grid; grid-template-columns: minmax(8rem, .85fr) minmax(0, 1.15fr); gap: .5rem; }
+.pattern-values dt { color: var(--muted); font-size: .75rem; }
+.pattern-values dd { margin: 0; font-size: .78rem; font-weight: 700; }
+.pattern-tag-list { display: grid; gap: .55rem; }
+.pattern-tag-result { padding: .75rem .8rem; border-left: 3px solid var(--brand); border-radius: 0 .75rem .75rem 0; background: var(--surface-soft); }
+.pattern-tag-title { display: flex; align-items: baseline; justify-content: space-between; gap: .7rem; margin-bottom: .35rem; }
+.pattern-tag-title span { color: var(--muted); font-size: .72rem; }
+.pattern-tag-result p { margin: .2rem 0 0; color: var(--muted); font-size: .76rem; line-height: 1.45; }
+.pattern-tag-result p strong { color: var(--ink); }
+.analysis-daily-details { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.analysis-daily-details > summary { color: var(--brand); font-size: .84rem; font-weight: 800; cursor: pointer; }
+.analysis-daily-details .table-scroll { margin-top: .65rem; }
+.analysis-daily-table { font-size: .78rem; }
+.doctor-pattern-card { box-shadow: none; }
+
 .settings-card + .settings-card { margin-top: .8rem; }
 .settings-card h3 { margin: 0 0 .35rem; font-size: 1.05rem; }
 .settings-copy { margin: 0 0 1rem; color: var(--muted); font-size: .88rem; }
@@ -484,6 +512,7 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   .metric-grid { grid-template-columns: repeat(3, 1fr); }
   .doctor-overview { grid-template-columns: repeat(4, 1fr); }
   .preset-form { grid-template-columns: 1fr auto; align-items: end; }
+  .pattern-result-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 36rem) {
@@ -531,7 +560,7 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   .doctor-section-heading { margin-bottom: 2mm; }
   .doctor-overview { grid-template-columns: repeat(4, 1fr); gap: 2mm; }
   .urgency-summary { grid-template-columns: repeat(3, 1fr); }
-  .doctor-stat, .table-card, .doctor-chart-card { break-inside: avoid; box-shadow: none; border-color: #aaa; border-radius: 2mm; }
+  .doctor-stat, .table-card, .doctor-chart-card, .pattern-analysis-card { break-inside: avoid; box-shadow: none; border-color: #aaa; border-radius: 2mm; }
   .doctor-stat { padding: 2.5mm; }
   .doctor-stat strong { font-size: 11pt; }
   .doctor-table-card { margin-top: 4mm; padding: 3mm; }
@@ -542,6 +571,10 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   .doctor-chart-card { break-after: page; }
   .doctor-details-start { break-before: page; }
   .doctor-secondary-card { background: #f5f7f6; }
+  .doctor-pattern-card { margin-top: 4mm; padding: 3mm; }
+  .pattern-result-grid { grid-template-columns: repeat(3, 1fr); gap: 2mm; }
+  .pattern-result, .pattern-tag-result { padding: 2mm; }
+  .analysis-disclaimer { padding: 2mm; }
   .basis-badge { border: 1px solid #999; background: #fff !important; color: #222 !important; }
   .table-scroll { overflow: visible; }
   table { font-size: 7.4pt; }

@@ -19,9 +19,10 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=31" />
+    <link rel="stylesheet" href="./app.css?v=33" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=31"></script>
+    <script defer src="./analysis.js?v=33"></script>
+    <script defer src="./app.js?v=33"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -118,6 +119,8 @@
                   <label><input type="checkbox" name="meal-tags" value="salty" /><span>Salzig</span></label>
                   <label><input type="checkbox" name="meal-tags" value="water_rich" /><span>Wasserreich</span></label>
                   <label><input type="checkbox" name="meal-tags" value="large_portion" /><span>Große Portion</span></label>
+                  <label><input type="checkbox" name="meal-tags" value="sweet" /><span>Süß</span></label>
+                  <label><input type="checkbox" name="meal-tags" value="late_meal" /><span>Spät gegessen</span></label>
                 </div>
               </fieldset>
             </div>
@@ -236,6 +239,23 @@
             </table>
           </div>
         </section>
+        <section class="pattern-analysis-card" aria-labelledby="comparison-pattern-heading">
+          <div class="pattern-analysis-heading">
+            <div><span class="eyebrow">Rechnerische Zusammenhänge</span><h3 id="comparison-pattern-heading">Musteranalyse</h3></div>
+            <span id="comparison-pattern-count" class="analysis-count"></span>
+          </div>
+          <p class="analysis-disclaimer">Deterministische Auswertung vollständiger Messtage. Sie beschreibt nur deine Einträge und enthält keine Diagnose oder medizinische Schlussfolgerung.</p>
+          <div id="comparison-pattern-analysis" class="pattern-analysis"></div>
+          <details class="analysis-daily-details">
+            <summary>Berechnete Tageswerte anzeigen</summary>
+            <div class="table-scroll">
+              <table class="analysis-daily-table">
+                <thead><tr><th>Messtag</th><th>Trinken</th><th>Urin</th><th>Nachturin</th><th>Nachtanteil</th><th>Gänge Tag/Nacht</th><th>Ø Urin</th><th>Max. Urin</th><th>Ø leicht</th><th>Ø mittel</th><th>Ø stark</th><th>3 h vor Schlaf</th><th>Letzte Mahlzeit</th><th>Letztes Getränk ≥ 300 ml</th></tr></thead>
+                <tbody id="comparison-analysis-days"></tbody>
+              </table>
+            </div>
+          </details>
+        </section>
       </section>
 
       <section id="view-doctor" class="view doctor-view" data-view="doctor" aria-labelledby="nav-doctor" hidden>
@@ -279,6 +299,14 @@
         <section class="table-card doctor-table-card">
           <h3>Harndrang-Auswertung</h3>
           <div id="doctor-urgency" class="urgency-summary"></div>
+        </section>
+        <section class="pattern-analysis-card doctor-pattern-card" aria-labelledby="doctor-pattern-heading">
+          <div class="pattern-analysis-heading">
+            <div><span class="eyebrow">Rechnerische Zusammenhänge</span><h3 id="doctor-pattern-heading">Musteranalyse</h3></div>
+            <span id="doctor-pattern-count" class="analysis-count"></span>
+          </div>
+          <p class="analysis-disclaimer">Beschreibende Statistik vollständiger Messtage; keine Diagnose und keine medizinische Schlussfolgerung.</p>
+          <div id="doctor-pattern-analysis" class="pattern-analysis"></div>
         </section>
         <section class="table-card doctor-table-card doctor-secondary-card">
           <h3>Zusatzanalyse</h3>
@@ -454,6 +482,8 @@
             <label><input type="checkbox" name="edit-meal-tags" value="salty" /><span>Salzig</span></label>
             <label><input type="checkbox" name="edit-meal-tags" value="water_rich" /><span>Wasserreich</span></label>
             <label><input type="checkbox" name="edit-meal-tags" value="large_portion" /><span>Große Portion</span></label>
+            <label><input type="checkbox" name="edit-meal-tags" value="sweet" /><span>Süß</span></label>
+            <label><input type="checkbox" name="edit-meal-tags" value="late_meal" /><span>Spät gegessen</span></label>
           </div>
         </fieldset>
         <fieldset id="edit-urgency-wrap" class="choice-field" hidden>

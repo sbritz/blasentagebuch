@@ -1,0 +1,181 @@
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === "object" && module.exports) module.exports = api;
+  else root.BladderAnalysis = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const URGENCY_LEVELS = ["leicht", "mittel", "stark"];
+  const DEFAULT_LARGE_DRINK_ML = 300;
+
+  function finiteValues(values) {
+    return values.map(Number).filter(Number.isFinite);
+  }
+
+  function mean(values) {
+    const numbers = finiteValues(values);
+    return numbers.length ? numbers.reduce((sum, value) => sum + value, 0) / numbers.length : null;
+  }
+
+  function median(values) {
+    const numbers = finiteValues(values).sort((a, b) => a - b);
+    if (!numbers.length) return null;
+    const middle = Math.floor(numbers.length / 2);
+    return numbers.length % 2 ? numbers[middle] : (numbers[middle - 1] + numbers[middle]) / 2;
+  }
+
+  function percentageDifference(baseline, comparison) {
+    const base = Number(baseline);
+    const next = Number(comparison);
+    if (!Number.isFinite(base) || !Number.isFinite(next) || base === 0) return null;
+    return (next - base) / Math.abs(base) * 100;
+  }
+
+  function pearson(pairs) {
+    const valid = pairs
+      .map((pair) => [Number(pair[0]), Number(pair[1])])
+      .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+    if (valid.length < 3) return null;
+    const xMean = mean(valid.map(([x]) => x));
+    const yMean = mean(valid.map(([, y]) => y));
+    const numerator = valid.reduce((sum, [x, y]) => sum + (x - xMean) * (y - yMean), 0);
+    const xSpread = valid.reduce((sum, [x]) => sum + (x - xMean) ** 2, 0);
+    const ySpread = valid.reduce((sum, [, y]) => sum + (y - yMean) ** 2, 0);
+    const denominator = Math.sqrt(xSpread * ySpread);
+    return denominator ? numerator / denominator : null;
+  }
+
+  function timestamp(value) {
+    const result = new Date(value).getTime();
+    return Number.isFinite(result) ? result : null;
+  }
+
+  function minutesBefore(eventTime, referenceTime) {
+    const event = timestamp(eventTime);
+    const reference = timestamp(referenceTime);
+    if (event === null || reference === null || event > reference) return null;
+    return (reference - event) / 60000;
+  }
+
+  function sumAmounts(entries) {
+    return entries.reduce((sum, entry) => sum + Number(entry.amount_ml || 0), 0);
+  }
+
+  function lastBefore(entries, referenceTime, predicate = () => true) {
+    const reference = timestamp(referenceTime);
+    if (reference === null) return null;
+    return entries
+      .filter((entry) => predicate(entry) && timestamp(entry.occurred_at) !== null && timestamp(entry.occurred_at) <= reference)
+      .sort((a, b) => timestamp(b.occurred_at) - timestamp(a.occurred_at))[0] || null;
+  }
+
+  function unique(values) {
+    return [...new Set(values.filter(Boolean))];
+  }
+
+  function computeDayMetrics({ dayKey, entries = [], sleepAt, context = {}, largeDrinkMl = DEFAULT_LARGE_DRINK_ML }) {
+    const active = entries.filter((entry) => !entry.deleted_at);
+    const drinks = active.filter((entry) => entry.kind === "drink");
+    const urinations = active.filter((entry) => entry.kind === "urination");
+    const meals = active.filter((entry) => entry.kind === "meal");
+    const dayUrinations = urinations.filter((entry) => entry.phase !== "night");
+    const nightUrinations = urinations.filter((entry) => entry.phase === "night");
+    const sleepTime = timestamp(sleepAt);
+    const lateDrinks = sleepTime === null ? [] : drinks.filter((entry) => {
+      const occurred = timestamp(entry.occurred_at);
+      return occurred !== null && occurred <= sleepTime && occurred >= sleepTime - 3 * 60 * 60 * 1000;
+    });
+    const lastMeal = lastBefore(meals, sleepAt);
+    const lastLargeDrink = lastBefore(drinks, sleepAt, (entry) => Number(entry.amount_ml || 0) >= largeDrinkMl);
+    const totalUrineMl = sumAmounts(urinations);
+    const urgency = Object.fromEntries(URGENCY_LEVELS.map((level) => {
+      const matching = urinations.filter((entry) => entry.urgency === level);
+      return [level, { count: matching.length, averageMl: mean(matching.map((entry) => entry.amount_ml)) }];
+    }));
+
+    return {
+      dayKey,
+      intakeMl: sumAmounts(drinks),
+      totalUrineMl,
+      nightUrineMl: sumAmounts(nightUrinations),
+      nightSharePercent: totalUrineMl ? sumAmounts(nightUrinations) / totalUrineMl * 100 : null,
+      dayVisits: dayUrinations.length,
+      nightVisits: nightUrinations.filter((entry) => !entry.morningVoid).length,
+      averageVoidMl: mean(urinations.map((entry) => entry.amount_ml)),
+      maximumVoidMl: urinations.length ? Math.max(...urinations.map((entry) => Number(entry.amount_ml || 0))) : null,
+      urgency,
+      beforeSleep3hMl: sumAmounts(lateDrinks),
+      minutesLastMealToSleep: lastMeal ? minutesBefore(lastMeal.occurred_at, sleepAt) : null,
+      minutesLastLargeDrinkToSleep: lastLargeDrink ? minutesBefore(lastLargeDrink.occurred_at, sleepAt) : null,
+      mealTags: unique(meals.flatMap((entry) => Array.isArray(entry.tags) ? entry.tags : [])),
+      dailyFactors: unique(Array.isArray(context.tags) ? context.tags : [])
+    };
+  }
+
+  function summarizeContinuous(days, xKey, yKey) {
+    const pairs = days
+      .map((day) => [day[xKey], day[yKey]])
+      .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+    return {
+      count: pairs.length,
+      xMean: mean(pairs.map(([x]) => x)),
+      xMedian: median(pairs.map(([x]) => x)),
+      yMean: mean(pairs.map(([, y]) => y)),
+      yMedian: median(pairs.map(([, y]) => y)),
+      correlation: pearson(pairs)
+    };
+  }
+
+  function compareTaggedDays(days, collectionKey, tag, outcomeKey) {
+    const withTag = days.filter((day) => (day[collectionKey] || []).includes(tag)).map((day) => day[outcomeKey]).filter(Number.isFinite);
+    const withoutTag = days.filter((day) => !(day[collectionKey] || []).includes(tag)).map((day) => day[outcomeKey]).filter(Number.isFinite);
+    const withMean = mean(withTag);
+    const withoutMean = mean(withoutTag);
+    return {
+      tag,
+      outcomeKey,
+      withCount: withTag.length,
+      withoutCount: withoutTag.length,
+      withMean,
+      withMedian: median(withTag),
+      withoutMean,
+      withoutMedian: median(withoutTag),
+      absoluteDifference: withMean === null || withoutMean === null ? null : withMean - withoutMean,
+      percentageDifference: percentageDifference(withoutMean, withMean)
+    };
+  }
+
+  function analyzePatterns(days, options = {}) {
+    const mealTags = options.mealTags || unique(days.flatMap((day) => day.mealTags || []));
+    const dailyFactors = options.dailyFactors || unique(days.flatMap((day) => day.dailyFactors || []));
+    const outcomes = ["nightUrineMl", "nightVisits", "nightSharePercent"];
+    const comparisons = (collectionKey, tags) => tags.map((tag) => ({
+      tag,
+      outcomes: Object.fromEntries(outcomes.map((outcome) => [outcome, compareTaggedDays(days, collectionKey, tag, outcome)]))
+    }));
+    return {
+      dayCount: days.length,
+      continuous: {
+        lateIntakeNightUrine: summarizeContinuous(days, "beforeSleep3hMl", "nightUrineMl"),
+        lateIntakeNightVisits: summarizeContinuous(days, "beforeSleep3hMl", "nightVisits"),
+        intakeUrine: summarizeContinuous(days, "intakeMl", "totalUrineMl")
+      },
+      mealTags: comparisons("mealTags", mealTags),
+      dailyFactors: comparisons("dailyFactors", dailyFactors)
+    };
+  }
+
+  return {
+    DEFAULT_LARGE_DRINK_ML,
+    URGENCY_LEVELS,
+    mean,
+    median,
+    percentageDifference,
+    pearson,
+    minutesBefore,
+    computeDayMetrics,
+    summarizeContinuous,
+    compareTaggedDays,
+    analyzePatterns
+  };
+});
