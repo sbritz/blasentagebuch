@@ -250,7 +250,9 @@
   }
 
   function renderQuickAmounts() {
-    $(".quick-amounts").innerHTML = quickAmountOptions().map(({ amount, count }) => {
+    const container = $(".quick-amounts");
+    if (!container) return;
+    container.innerHTML = quickAmountOptions().map(({ amount, count }) => {
       const usage = count ? `${count}× bisher verwendet` : "Standardwert";
       return `<button type="button" data-amount="${amount}" title="${usage}" aria-label="${amount} Milliliter, ${usage}">${amount}</button>`;
     }).join("");
@@ -599,7 +601,7 @@
     $("#amount-row").hidden = kind === "meal";
     $("#urgency-wrap").hidden = kind !== "urination";
     $("#vessel-picker-wrap").hidden = kind !== "drink" || activeVessels().length === 0;
-    $("#amount").placeholder = kind === "drink" ? "250" : "300";
+    $("#amount").placeholder = "ml eingeben";
     $("#entry-form .primary-button[type='submit']").textContent = kind === "drink" ? "Getränk speichern" : (kind === "urination" ? "Toilettengang speichern" : "Mahlzeit speichern");
     if (kind !== "meal") renderQuickAmounts();
     renderEntrySuggestions();
@@ -760,13 +762,13 @@
     $("#sleep-start-button").hidden = status.phase !== "day";
     $("#phase-control").classList.toggle("night", status.phase === "night");
     if (status.pendingMorningVoid) {
-      $("#phase-help").textContent = "Der nächste Toilettengang wird als Morgenurin der vergangenen Nacht zugeordnet.";
+      $("#phase-help").textContent = "Der nächste Toilettengang zählt als Morgenurin.";
     } else if (status.source === "fallback") {
-      $("#phase-help").textContent = `Automatisch nach der Ersatz-Nachtzeit ${state.nightStart}–${state.nightEnd} Uhr. Tippe beim Schlafengehen oder Aufstehen für eine genaue Auswertung.`;
+      $("#phase-help").textContent = `Automatisch ${state.nightStart}–${state.nightEnd} Uhr`;
     } else {
       $("#phase-help").textContent = status.phase === "night"
-        ? "Nächtliche Toilettengänge zählen zu diesem Messtag."
-        : "Beim Aufstehen wird der nächste Toilettengang automatisch als Morgenurin erkannt.";
+        ? "Toilettengänge zählen jetzt zur Nacht."
+        : "Der erste Toilettengang nach dem Aufstehen zählt als Morgenurin.";
     }
   }
 
@@ -841,6 +843,7 @@
     const isCurrentDay = today === currentDiaryDayKey();
     renderDayNavigator(today);
     $("#capture-card").hidden = !isCurrentDay;
+    $("#phase-control").hidden = !isCurrentDay;
     if (isCurrentDay) renderPhaseControl();
     renderDailyContext(today);
     $("#summary-heading").textContent = "Tagesübersicht";
@@ -1561,7 +1564,7 @@
 
   function bindEvents() {
     $$(".type-option").forEach((button) => button.addEventListener("click", () => setKind(button.dataset.kind)));
-    $(".quick-amounts").addEventListener("click", (event) => {
+    $(".quick-amounts")?.addEventListener("click", (event) => {
       const button = event.target.closest("button[data-amount]");
       if (!button) return;
       $("#amount").value = button.dataset.amount;

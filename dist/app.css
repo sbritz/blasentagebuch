@@ -25,6 +25,8 @@
   --ambient: rgba(37, 173, 151, .14);
   --shadow: 0 18px 48px rgba(20, 60, 52, .1);
   --shadow-soft: 0 8px 26px rgba(20, 60, 52, .06);
+  --control-height: 3.25rem;
+  --control-radius: .85rem;
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -180,6 +182,7 @@ button, select { cursor: pointer; }
   border-radius: 1.4rem;
   box-shadow: var(--shadow);
 }
+.capture-card, .phase-control { width: min(100%, 52rem); margin-inline: auto; }
 .capture-card[data-kind="urination"] { --mode: var(--night); --mode-soft: var(--night-soft); }
 .capture-card[data-kind="meal"] { --mode: #a7641c; --mode-soft: #fff0dc; }
 html[data-color-scheme="dark"] .capture-card[data-kind="meal"] { --mode: #f1b973; --mode-soft: #3a2a19; }
@@ -190,22 +193,21 @@ html[data-color-scheme="dark"] .capture-card[data-kind="meal"] { --mode: #f1b973
 .type-option.active { color: var(--mode); background: var(--mode-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mode) 28%, transparent); }
 .capture-card .primary-button { border-color: var(--mode); background: var(--mode); box-shadow: 0 9px 22px color-mix(in srgb, var(--mode) 24%, transparent); }
 
-.phase-control { display: flex; flex-direction: column; gap: .75rem; margin-bottom: 1rem; padding: .85rem; border: 1px solid color-mix(in srgb, var(--brand) 20%, var(--line)); border-radius: 1rem; background: var(--brand-soft); }
+.phase-control { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; padding: .75rem 1rem; border: 1px solid color-mix(in srgb, var(--brand) 20%, var(--line)); border-radius: 1rem; background: var(--brand-soft); }
 .phase-control.night { border-color: color-mix(in srgb, var(--night) 28%, var(--line)); background: var(--night-soft); }
 .phase-copy { display: flex; flex-direction: column; gap: .12rem; }
 .phase-copy strong { color: var(--brand-deep); font-size: 1.05rem; }
 .phase-control.night .phase-copy strong { color: var(--night); }
 .phase-copy > span:last-child { color: var(--muted); font-size: .78rem; }
-.phase-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; }
-.phase-button { min-height: 2.65rem; padding: .55rem .8rem; border: 0; border-radius: .75rem; background: var(--brand); color: white; font-weight: 750; }
+.phase-actions { display: flex; flex-direction: column; align-items: flex-end; gap: .28rem; flex: 0 0 auto; }
+.phase-button { min-height: 2.55rem; padding: .5rem .68rem; border: 0; border-radius: .75rem; background: var(--brand); color: white; font-size: .86rem; font-weight: 750; white-space: nowrap; }
 .phase-button.sleep { background: var(--night); }
 
 .field { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
 .field label, .compact-field { color: var(--ink); font-size: .88rem; font-weight: 750; }
 .field label span { color: var(--muted); font-weight: 500; }
-.entry-suggestion { margin-bottom: .85rem; }
+.entry-suggestion { margin-bottom: .9rem; }
 .entry-suggestion select { border-color: color-mix(in srgb, var(--brand) 38%, var(--field-line)); background: var(--brand-soft); color: var(--brand-deep); font-weight: 700; }
-.entry-suggestion small { color: var(--muted); font-size: .74rem; line-height: 1.35; }
 .day-status { display: inline-flex; margin-left: .4rem; padding: .12rem .4rem; border-radius: 999px; font-size: .66rem; font-weight: 750; vertical-align: middle; }
 .day-status.incomplete { background: var(--warning-soft); color: var(--warning); }
 .field-label-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
@@ -216,10 +218,10 @@ html[data-color-scheme="dark"] .capture-card[data-kind="meal"] { --mode: #f1b973
 .date-time-field input { min-width: 0; max-width: 100%; }
 input, select, textarea {
   width: 100%;
-  min-height: 3rem;
+  min-height: var(--control-height);
   padding: .65rem .78rem;
   border: 1px solid var(--field-line);
-  border-radius: .8rem;
+  border-radius: var(--control-radius);
   outline: 0;
   background: var(--field-bg);
   color: var(--ink);
@@ -229,13 +231,8 @@ input:focus, select:focus, textarea:focus, button:focus-visible, summary:focus-v
 .input-suffix { position: relative; }
 .input-suffix input { padding-right: 3rem; }
 .input-suffix span { position: absolute; top: 50%; right: .8rem; transform: translateY(-50%); color: var(--muted); }
-.amount-row { display: grid; gap: .65rem; margin-top: .75rem; }
-.quick-amounts-wrap { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
+.amount-row { display: grid; gap: .65rem; margin-top: .9rem; }
 .control-label { color: var(--ink); font-size: .88rem; font-weight: 750; }
-.quick-amounts { display: grid; grid-template-columns: repeat(3, 1fr); gap: .45rem; }
-.quick-amounts button { min-height: 3rem; border: 1px solid color-mix(in srgb, var(--brand) 18%, var(--line)); border-radius: .8rem; background: var(--brand-soft); color: var(--brand-deep); font-weight: 750; transition: transform .14s ease, background .14s ease, border-color .14s ease; }
-.quick-amounts button:active { transform: scale(.97); }
-.quick-amounts button.selected { border-color: var(--brand); background: var(--brand); color: white; }
 .choice-field { min-width: 0; margin: .85rem 0 0; padding: 0; border: 0; }
 .choice-field legend { margin-bottom: .4rem; color: var(--ink); font-size: .88rem; font-weight: 750; }
 .urgency-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: .45rem; }
@@ -253,13 +250,14 @@ input:focus, select:focus, textarea:focus, button:focus-visible, summary:focus-v
 .tag-options input:checked + span { border-color: var(--brand); background: var(--brand); color: white; }
 .tag-options input:focus-visible + span { outline: 3px solid rgba(31, 130, 115, .22); outline-offset: 2px; }
 .more-fields { margin: .85rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid transparent; }
-.more-fields[open] { padding-bottom: .8rem; border-bottom-color: var(--line); }
+.more-fields[open] { padding-bottom: .9rem; border-bottom-color: var(--line); }
 .more-fields summary { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .85rem 0 .35rem; list-style: none; color: var(--muted); font-size: .88rem; cursor: pointer; }
 .more-fields summary::-webkit-details-marker { display: none; }
 .more-fields summary > span::before { content: "›"; display: inline-block; margin-right: .45rem; color: var(--brand); font-size: 1.2rem; line-height: .8; transition: transform .18s ease; }
 .more-fields[open] summary > span::before { transform: rotate(90deg); }
 .more-fields summary strong { color: var(--brand-deep); font-size: .8rem; font-weight: 750; }
-.form-grid { display: grid; gap: .75rem; margin-top: .65rem; }
+.form-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-top: .75rem; }
+.note-field { margin-top: .15rem; }
 
 .primary-button, .secondary-button, .danger-button {
   min-height: 3rem;
@@ -273,8 +271,8 @@ input:focus, select:focus, textarea:focus, button:focus-visible, summary:focus-v
 .secondary-button { border: 1px solid var(--field-line); background: var(--paper); color: var(--brand-deep); }
 .danger-button { border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line)); background: var(--danger-soft); color: var(--danger); }
 .text-button { padding: .4rem; border: 0; background: transparent; color: var(--brand); font-weight: 700; }
-.manage-drinks-button { align-self: flex-start; min-height: 2rem; padding: .25rem 0; border: 0; background: transparent; color: var(--brand); font-size: .84rem; font-weight: 800; }
 .vessel-picker-wrap { display: grid; gap: .45rem; margin-top: .85rem; }
+.vessel-picker-wrap + #drink-preset-wrap { margin-top: .85rem; }
 .vessel-picker { display: grid; grid-auto-flow: column; grid-auto-columns: 6rem; gap: .55rem; overflow-x: auto; padding: .1rem 0 .35rem; scroll-snap-type: x proximity; }
 .vessel-choice { display: grid; grid-template-rows: 4.6rem auto auto; gap: .2rem; padding: .35rem; border: 1px solid var(--line); border-radius: .9rem; background: var(--field-bg); color: var(--ink); text-align: center; scroll-snap-align: start; }
 .vessel-choice img { width: 100%; height: 4.6rem; object-fit: cover; border-radius: .65rem; background: var(--surface-soft); }
@@ -455,11 +453,8 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   .app-shell { padding: 1.5rem 2rem 7rem; }
   .capture-card { padding: 1.35rem; }
   .date-time-fields { grid-template-columns: minmax(0, 1.25fr) minmax(0, .85fr); gap: .55rem; }
-  .phase-control { flex-direction: row; align-items: center; justify-content: space-between; }
   .phase-actions { justify-content: flex-end; }
   .sleep-event-form { grid-template-columns: minmax(10rem, .75fr) minmax(18rem, 1.5fr) auto; align-items: end; }
-  .quick-amounts { grid-template-columns: repeat(6, 1fr); }
-  .form-grid { grid-template-columns: 1fr 1fr; }
   .metric-grid { grid-template-columns: repeat(3, 1fr); }
   .doctor-overview { grid-template-columns: repeat(4, 1fr); }
   .preset-form { grid-template-columns: 1fr auto; align-items: end; }
@@ -479,6 +474,11 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   .theme-options button { min-height: 3.5rem; }
 }
 
+@media (max-width: 23rem) {
+  .phase-control { align-items: stretch; flex-direction: column; }
+  .phase-actions { align-items: stretch; }
+}
+
 @media (min-width: 62rem) {
   body { padding-left: 14.5rem; }
   .app-header { left: 14.5rem; padding-inline: 2.2rem; }
@@ -486,9 +486,7 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   .bottom-nav { top: 0; right: auto; width: 14.5rem; grid-template-columns: 1fr; grid-auto-rows: 3.5rem; align-content: start; gap: .3rem; padding: 6rem .8rem 1rem; border-top: 0; border-right: 1px solid var(--line); }
   .bottom-nav button { display: flex; align-items: center; gap: .8rem; padding: .7rem 1rem; text-align: left; font-size: .86rem; }
   .bottom-nav button span { display: inline-grid; place-items: center; width: 1.5rem; height: auto; }
-  .capture-card { display: grid; grid-template-columns: 15rem 1fr; gap: 1rem; }
-  .type-switch { grid-template-columns: 1fr; align-content: start; margin: 0; }
-  .type-option { text-align: left; padding: .65rem .8rem; }
+  .capture-card { padding: 1.5rem; }
 }
 
 @media print {
