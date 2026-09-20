@@ -145,6 +145,57 @@
     };
   }
 
+  function compareByMedian(days, xKey, yKey) {
+    const valid = days.filter((day) => Number.isFinite(day[xKey]) && Number.isFinite(day[yKey]));
+    const splitValue = median(valid.map((day) => day[xKey]));
+    if (splitValue === null) return null;
+    const lower = valid.filter((day) => day[xKey] <= splitValue);
+    const higher = valid.filter((day) => day[xKey] > splitValue);
+    if (!lower.length || !higher.length) return null;
+    return {
+      splitValue,
+      lowerCount: lower.length,
+      higherCount: higher.length,
+      lowerXMean: mean(lower.map((day) => day[xKey])),
+      higherXMean: mean(higher.map((day) => day[xKey])),
+      lowerYMean: mean(lower.map((day) => day[yKey])),
+      higherYMean: mean(higher.map((day) => day[yKey])),
+      absoluteDifference: mean(higher.map((day) => day[yKey])) - mean(lower.map((day) => day[yKey])),
+      percentageDifference: percentageDifference(mean(lower.map((day) => day[yKey])), mean(higher.map((day) => day[yKey])))
+    };
+  }
+
+  function observedPatterns(days, options = {}) {
+    if (days.length < 3) return [];
+    const mealTags = options.mealTags || unique(days.flatMap((day) => day.mealTags || []));
+    const dailyFactors = options.dailyFactors || unique(days.flatMap((day) => day.dailyFactors || []));
+    const candidates = [];
+    let order = 0;
+    const addContinuous = (id, xKey, yKey) => {
+      const summary = summarizeContinuous(days, xKey, yKey);
+      const comparison = compareByMedian(days, xKey, yKey);
+      if (!comparison || !Number.isFinite(summary.correlation) || Math.abs(summary.correlation) < .2 || comparison.absoluteDifference === 0) return;
+      candidates.push({ id, kind: "continuous", xKey, yKey, summary, comparison, score: Math.abs(summary.correlation), order: order++ });
+    };
+    addContinuous("late-intake-night-urine", "beforeSleep3hMl", "nightUrineMl");
+    addContinuous("late-intake-night-visits", "beforeSleep3hMl", "nightVisits");
+    addContinuous("intake-total-urine", "intakeMl", "totalUrineMl");
+
+    const addTagged = (kind, collectionKey, tags) => tags.forEach((tag) => {
+      const comparison = compareTaggedDays(days, collectionKey, tag, "nightUrineMl");
+      if (comparison.withCount < 2 || comparison.withoutCount < 2 || !Number.isFinite(comparison.absoluteDifference) || comparison.absoluteDifference === 0) return;
+      const scale = Math.max(1, Math.abs(comparison.withoutMean));
+      candidates.push({ id: `${kind}-${tag}`, kind, tag, comparison, score: Math.abs(comparison.absoluteDifference) / scale, order: order++ });
+    });
+    addTagged("mealTag", "mealTags", mealTags);
+    addTagged("dailyFactor", "dailyFactors", dailyFactors);
+
+    return candidates
+      .sort((a, b) => b.score - a.score || a.order - b.order)
+      .slice(0, Math.max(0, options.maxPatterns || 5))
+      .map(({ score, order: candidateOrder, ...candidate }) => candidate);
+  }
+
   function analyzePatterns(days, options = {}) {
     const mealTags = options.mealTags || unique(days.flatMap((day) => day.mealTags || []));
     const dailyFactors = options.dailyFactors || unique(days.flatMap((day) => day.dailyFactors || []));
@@ -176,6 +227,8 @@
     computeDayMetrics,
     summarizeContinuous,
     compareTaggedDays,
+    compareByMedian,
+    observedPatterns,
     analyzePatterns
   };
 });

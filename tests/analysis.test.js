@@ -63,3 +63,29 @@ test("Tag-Vergleiche liefern Mittelwert, Median sowie absolute und prozentuale D
   assert.equal(result.absoluteDifference, 250);
   assert.equal(Math.round(result.percentageDifference * 10) / 10, 38.5);
 });
+
+test("Arztbericht wählt höchstens fünf ausreichend belegte Muster deterministisch aus", () => {
+  const days = Array.from({ length: 6 }, (_, index) => ({
+    dayKey: `2026-09-${String(index + 1).padStart(2, "0")}`,
+    beforeSleep3hMl: 200 + index * 100,
+    nightUrineMl: 500 + index * 120,
+    nightVisits: 1 + Math.floor(index / 2),
+    intakeMl: 1600 + index * 150,
+    totalUrineMl: 1400 + index * 140,
+    mealTags: index >= 3 ? ["salty", "large_portion"] : [],
+    dailyFactors: index >= 3 ? ["stress", "cold"] : []
+  }));
+  const result = analysis.observedPatterns(days, {
+    mealTags: ["salty", "large_portion"],
+    dailyFactors: ["stress", "cold"],
+    maxPatterns: 5
+  });
+  assert.equal(result.length, 5);
+  assert.ok(result.every((pattern) => ["continuous", "mealTag", "dailyFactor"].includes(pattern.kind)));
+  assert.ok(result.some((pattern) => pattern.id === "late-intake-night-urine"));
+  assert.deepEqual(result, analysis.observedPatterns(days, {
+    mealTags: ["salty", "large_portion"],
+    dailyFactors: ["stress", "cold"],
+    maxPatterns: 5
+  }));
+});

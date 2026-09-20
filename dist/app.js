@@ -711,6 +711,59 @@
     ${renderTagAnalysis("Tagesfaktoren", result.dailyFactors, DAILY_TAG_LABELS)}`;
   }
 
+  function observedPatternPeriod(days) {
+    const keys = days.map((day) => day.dayKey).sort();
+    if (!keys.length) return "–";
+    const options = { day: "2-digit", month: "2-digit", year: "numeric" };
+    return `${formatDate(dateFromKey(keys[0]), options)}–${formatDate(dateFromKey(keys.at(-1)), options)}`;
+  }
+
+  function renderObservedContinuous(pattern, period) {
+    const { comparison, summary } = pattern;
+    const higher = comparison.absoluteDifference > 0 ? "höher" : "niedriger";
+    let statement = "";
+    let values = "";
+    if (pattern.id === "late-intake-night-urine") {
+      statement = `Bei höherer Flüssigkeitsaufnahme in den letzten drei Stunden vor dem Schlafengehen lag der mittlere Nachturin ${higher} als an Tagen mit niedrigerer Aufnahme.`;
+      values = `Höhere Aufnahme: Ø ${formatAmount(comparison.higherXMean)} → Ø ${formatAmount(comparison.higherYMean)} Nachturin · Niedrigere Aufnahme: Ø ${formatAmount(comparison.lowerXMean)} → Ø ${formatAmount(comparison.lowerYMean)} Nachturin`;
+    } else if (pattern.id === "late-intake-night-visits") {
+      statement = `Bei höherer Flüssigkeitsaufnahme in den letzten drei Stunden vor dem Schlafengehen lag die mittlere Zahl der Nachtgänge ${higher}.`;
+      values = `Höhere Aufnahme: Ø ${formatAmount(comparison.higherXMean)} → Ø ${formatDecimal(comparison.higherYMean)} Nachtgänge · Niedrigere Aufnahme: Ø ${formatAmount(comparison.lowerXMean)} → Ø ${formatDecimal(comparison.lowerYMean)} Nachtgänge`;
+    } else {
+      statement = `Bei höherer Gesamt-Trinkmenge lag die mittlere Gesamt-Urinmenge ${higher} als an Tagen mit niedrigerer Trinkmenge.`;
+      values = `Höhere Trinkmenge: Ø ${formatAmount(comparison.higherXMean)} → Ø ${formatAmount(comparison.higherYMean)} Urin · Niedrigere Trinkmenge: Ø ${formatAmount(comparison.lowerXMean)} → Ø ${formatAmount(comparison.lowerYMean)} Urin`;
+    }
+    const count = comparison.higherCount + comparison.lowerCount;
+    return `<article class="observed-pattern"><p>${escapeHtml(statement)}</p><span>${escapeHtml(values)} · Pearson r = ${formatDecimal(summary.correlation, 2)}</span><small>${count} Tage (${comparison.higherCount} höhere / ${comparison.lowerCount} niedrigere Werte) · Zeitraum ${escapeHtml(period)} · rein beobachtend; keine Kausalität, Diagnose oder Therapieempfehlung</small></article>`;
+  }
+
+  function renderObservedTagged(pattern, period) {
+    const labels = pattern.kind === "mealTag" ? MEAL_TAG_LABELS : DAILY_TAG_LABELS;
+    const label = labels[pattern.tag] || pattern.tag;
+    const comparison = pattern.comparison;
+    const direction = comparison.absoluteDifference > 0 ? "höher" : "niedriger";
+    const statement = pattern.kind === "mealTag"
+      ? `An Tagen mit als „${label}“ markierten Mahlzeiten lag der mittlere Nachturin ${direction} als an Vergleichstagen.`
+      : `An Tagen mit dem Tagesfaktor „${label}“ lag der mittlere Nachturin ${direction} als an Vergleichstagen.`;
+    const values = `Mit Merkmal: Ø ${formatAmount(comparison.withMean)} · Ohne Merkmal: Ø ${formatAmount(comparison.withoutMean)} · Differenz ${signedValue(comparison.absoluteDifference, formatAmount)} (${signedValue(comparison.percentageDifference, (value) => `${formatDecimal(value)} %`)})`;
+    const count = comparison.withCount + comparison.withoutCount;
+    return `<article class="observed-pattern"><p>${escapeHtml(statement)}</p><span>${escapeHtml(values)}</span><small>${count} Tage (${comparison.withCount} mit / ${comparison.withoutCount} ohne Merkmal) · Zeitraum ${escapeHtml(period)} · rein beobachtend; keine Kausalität, Diagnose oder Therapieempfehlung</small></article>`;
+  }
+
+  function renderObservedPatterns(days) {
+    const container = $("#doctor-pattern-analysis");
+    const count = $("#doctor-pattern-count");
+    if (!container || !count || !Analysis) return;
+    const patterns = Analysis.observedPatterns(days, { mealTags: Object.keys(MEAL_TAG_LABELS), dailyFactors: Object.keys(DAILY_TAG_LABELS), maxPatterns: 5 });
+    count.textContent = `${patterns.length} Muster`;
+    if (!patterns.length) {
+      container.innerHTML = '<div class="empty-state compact"><strong>Noch keine belastbare Gegenüberstellung</strong>Es werden mindestens drei vollständige Messtage und für Merkmale mindestens zwei Tage mit sowie zwei Tage ohne Markierung benötigt.</div>';
+      return;
+    }
+    const period = observedPatternPeriod(days);
+    container.innerHTML = `<div class="observed-pattern-list">${patterns.map((pattern) => pattern.kind === "continuous" ? renderObservedContinuous(pattern, period) : renderObservedTagged(pattern, period)).join("")}</div>`;
+  }
+
   function renderAnalysisDayTable(days) {
     const table = $("#comparison-analysis-days");
     if (!table) return;
@@ -1201,7 +1254,7 @@
       const item = total.urgency[level];
       return `<article class="urgency-stat"><span>${urgencyLabel(level)}</span><strong>${item.count}× · Ø Urin ${formatAmount(item.average)}</strong></article>`;
     }).join("");
-    renderPatternAnalysis(analysisDaysForKeys(completeRows.map((row) => row.key)), "#doctor-pattern-analysis", "#doctor-pattern-count");
+    renderObservedPatterns(analysisDaysForKeys(completeRows.map((row) => row.key)));
     $("#doctor-additional").innerHTML = measuredRows.length ? measuredRows.map(({ key, stats, sleepWindow }) => {
       const sleepTime = sleepWindow.start ? formatDate(sleepWindow.start.occurred_at, { hour: "2-digit", minute: "2-digit" }) : state.nightStart;
       const wakeTime = sleepWindow.wake ? formatDate(sleepWindow.wake.occurred_at, { hour: "2-digit", minute: "2-digit" }) : state.nightEnd;

@@ -22,6 +22,7 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 - Harndrang-Auswertung nach Stufe mit Anzahl und Durchschnittsmenge
 - deterministische Musteranalyse ohne externe KI/API: Mittelwert, Median, Differenzen und Pearson-Korrelationen für vollständige Messtage
 - Vergleich von spätem Trinken, Trink-/Urin-Gesamtmengen, Mahlzeiten-Merkmalen und Tagesfaktoren mit Nachturin und Nachtgängen
+- kompakter Arztbericht mit maximal fünf datenbasierten „Beobachteten Mustern“, Vergleichswerten, Fallzahlen, Zeitraum und ausdrücklicher Nicht-Kausalitäts-/Nicht-Diagnose-Kennzeichnung
 - berechnete Zeitabstände zwischen Schlaf und letzter Mahlzeit beziehungsweise letzter einzelner Getränkeaufnahme ab 300 ml
 - Tagesfaktoren und freie Tagesnotiz, geräteübergreifend synchronisiert
 - geräteübergreifend synchronisierte Schlaf-/Aufstehzeiten und Ersatz-Nachtzeit mit rückwirkender Neuberechnung aller Einträge
