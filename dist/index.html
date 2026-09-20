@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=27" />
+    <link rel="stylesheet" href="./app.css?v=28" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=27"></script>
+    <script defer src="./app.js?v=28"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -355,7 +355,16 @@
           <form id="vessel-form" class="vessel-form">
             <div class="field"><label for="vessel-name">Name</label><input id="vessel-name" maxlength="40" placeholder="z. B. großes Wasserglas" required /></div>
             <div class="field"><label for="vessel-amount">Füllmenge</label><div class="input-suffix"><input id="vessel-amount" type="number" min="10" max="5000" step="1" inputmode="numeric" placeholder="z. B. 265" required /><span>ml</span></div></div>
-            <div class="field"><label for="vessel-photo">Foto auswählen</label><input id="vessel-photo" type="file" accept="image/*" required /><small>Du kannst ein vorhandenes Foto wählen oder ein neues aufnehmen.</small></div>
+            <div class="field">
+              <span class="control-label">Foto</span>
+              <div class="photo-source-actions">
+                <input id="vessel-photo-library" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" />
+                <label class="secondary-button photo-source-button" for="vessel-photo-library">▧ Aus Mediathek wählen</label>
+                <input id="vessel-photo-camera" class="sr-only" type="file" accept="image/*" capture="environment" />
+                <label class="secondary-button photo-source-button" for="vessel-photo-camera">◉ Foto aufnehmen</label>
+              </div>
+              <small id="vessel-photo-selection">Noch kein Foto ausgewählt.</small>
+            </div>
             <img id="vessel-preview" class="vessel-preview" alt="Vorschau des Trinkgefäßes" hidden />
             <button class="secondary-button" type="submit">Gefäß speichern</button>
           </form>

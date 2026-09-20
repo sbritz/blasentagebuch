@@ -45,6 +45,7 @@
   let sleepEventsSyncAvailable = null;
   let extendedDiarySyncAvailable = null;
   let vesselSyncAvailable = null;
+  let selectedVesselPhotoFile = null;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -1792,24 +1793,30 @@
       if (deleteButton) deletePreset(deleteButton.dataset.deletePreset);
     });
     $("#preset-cancel-button").addEventListener("click", () => resetPresetForm());
-    $("#vessel-photo").addEventListener("change", async (event) => {
+    async function handleVesselPhotoSelection(event) {
       const file = event.target.files?.[0];
       if (!file) return;
       try {
         const imageData = await resizeVesselPhoto(file);
+        selectedVesselPhotoFile = file;
         $("#vessel-preview").src = imageData;
         $("#vessel-preview").hidden = false;
+        $("#vessel-photo-selection").textContent = `Ausgewählt: ${file.name || "Foto"}`;
       } catch (error) {
+        selectedVesselPhotoFile = null;
         event.target.value = "";
         $("#vessel-preview").hidden = true;
+        $("#vessel-photo-selection").textContent = "Noch kein Foto ausgewählt.";
         showToast(error.message);
       }
-    });
+    }
+    $("#vessel-photo-library").addEventListener("change", handleVesselPhotoSelection);
+    $("#vessel-photo-camera").addEventListener("change", handleVesselPhotoSelection);
     $("#vessel-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const name = $("#vessel-name").value.trim();
       const amount = Number($("#vessel-amount").value);
-      const file = $("#vessel-photo").files?.[0];
+      const file = selectedVesselPhotoFile;
       if (!name || !Number.isFinite(amount) || amount < 10 || amount > 5000 || !file) {
         showToast("Bitte Name, Füllmenge und Foto vollständig angeben.");
         return;
@@ -1820,7 +1827,9 @@
         state.vessels.push({ id: uuid(), name: name.slice(0, 40), amount_ml: Math.round(amount), image_data: imageData, created_at: now, updated_at: now, deleted_at: null, dirty: true });
         saveState();
         $("#vessel-form").reset();
+        selectedVesselPhotoFile = null;
         $("#vessel-preview").hidden = true;
+        $("#vessel-photo-selection").textContent = "Noch kein Foto ausgewählt.";
         renderAll();
         void syncData();
         showToast("Trinkgefäß gespeichert");

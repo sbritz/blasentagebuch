@@ -419,6 +419,8 @@ th { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-s
 .vessel-card span { color: var(--muted); font-size: .78rem; }
 .vessel-card button { justify-self: start; padding: 0; border: 0; background: transparent; color: var(--danger); font-size: .75rem; font-weight: 750; }
 .vessel-form { display: grid; gap: .65rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.photo-source-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+.photo-source-button { display: flex; align-items: center; justify-content: center; min-height: var(--control-height); padding: .6rem .7rem; text-align: center; cursor: pointer; }
 .vessel-preview { width: 7rem; height: 7rem; object-fit: cover; border-radius: .9rem; border: 1px solid var(--line); }
 .sleep-event-form { display: grid; gap: .65rem; margin: .8rem 0 1rem; padding: .85rem; border: 1px solid var(--line); border-radius: .9rem; background: var(--field-bg); }
 .sleep-event-list { margin-top: .5rem; }
@@ -476,6 +478,7 @@ dialog::backdrop { background: rgba(11,31,28,.5); backdrop-filter: blur(3px); }
   .sync-status #sync-label { display: none; }
   .theme-options { grid-template-columns: 1fr; }
   .theme-options button { min-height: 3.5rem; }
+  .photo-source-actions { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 23rem) {
