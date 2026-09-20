@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=29" />
+    <link rel="stylesheet" href="./app.css?v=31" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=29"></script>
+    <script defer src="./app.js?v=31"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -176,12 +176,11 @@
           <details class="secondary-metrics">
             <summary>Weitere Tageswerte</summary>
             <div class="metric-grid metric-grid-secondary">
-              <article class="metric metric-intake"><span>Nach 20 Uhr</span><strong id="metric-after-20">0 ml</strong></article>
               <article class="metric metric-intake"><span>3 h vor Schlaf</span><strong id="metric-before-sleep">0 ml</strong></article>
               <article class="metric"><span>Urin Tag</span><strong id="metric-day">0 ml</strong></article>
               <article class="metric metric-night"><span>Urin Nacht</span><strong id="metric-night">0 ml</strong></article>
-              <article class="metric"><span>Ø Entleerung</span><strong id="metric-average">0 ml</strong></article>
-              <article class="metric"><span>Max. Entleerung</span><strong id="metric-maximum">0 ml</strong></article>
+              <article class="metric"><span>Ø Urin je Gang</span><strong id="metric-average">0 ml</strong></article>
+              <article class="metric"><span>Max. Urin je Gang</span><strong id="metric-maximum">0 ml</strong></article>
             </div>
           </details>
         </section>
@@ -232,7 +231,7 @@
         <section class="table-card">
           <div class="table-scroll">
             <table>
-              <thead><tr><th>Messtag</th><th>Getrunken</th><th>Nach 20 h</th><th>3 h vor Schlaf</th><th>Urin Tag</th><th>Urin Nacht</th><th>Nachtanteil</th><th>Tag-/Nachtgänge</th><th>Ø</th><th>Max.</th></tr></thead>
+              <thead><tr><th>Messtag</th><th>Getrunken</th><th>3 h vor Schlaf</th><th>Urin Tag</th><th>Urin Nacht</th><th>Nachtanteil</th><th>Tag-/Nachtgänge</th><th>Ø Urin je Gang</th><th>Max. Urin je Gang</th></tr></thead>
               <tbody id="comparison-table"></tbody>
             </table>
           </div>
@@ -272,7 +271,7 @@
           <p id="doctor-basis-note" class="doctor-table-note"></p>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>Messtag</th><th>Getrunken</th><th>Urin gesamt</th><th>Urin Tag</th><th>Urin Nacht</th><th>Nachtanteil</th><th>Gänge Tag/Nacht</th><th>Ø</th><th>Max.</th></tr></thead>
+              <thead><tr><th>Messtag</th><th>Getrunken</th><th>Urin gesamt</th><th>Urin Tag</th><th>Urin Nacht</th><th>Nachtanteil</th><th>Gänge Tag/Nacht</th><th>Ø Urin je Gang</th><th>Max. Urin je Gang</th></tr></thead>
               <tbody id="doctor-days"></tbody>
             </table>
           </div>
@@ -283,10 +282,10 @@
         </section>
         <section class="table-card doctor-table-card doctor-secondary-card">
           <h3>Zusatzanalyse</h3>
-          <p class="doctor-table-note">Abendliches Trinken und die Zeitbasis der Nachtzuordnung – als ergänzende Information.</p>
+          <p class="doctor-table-note">Trinkmenge in den drei Stunden vor dem Schlafen und die Zeitbasis der Nachtzuordnung.</p>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>Messtag</th><th>Nach 20 Uhr</th><th>3 h vor Schlaf</th><th>Schlafen</th><th>Aufgestanden</th><th>Zeitbasis</th></tr></thead>
+              <thead><tr><th>Messtag</th><th>3 h vor Schlaf</th><th>Schlafen</th><th>Aufgestanden</th><th>Zeitbasis</th></tr></thead>
               <tbody id="doctor-additional"></tbody>
             </table>
           </div>

@@ -942,7 +942,6 @@
     $("#summary-heading").textContent = "Tagesübersicht";
     $("#metric-intake").textContent = formatAmount(stats.intake);
     $("#metric-output").textContent = formatAmount(stats.output);
-    $("#metric-after-20").textContent = formatAmount(stats.after20);
     $("#metric-before-sleep").textContent = formatAmount(stats.beforeSleep);
     $("#metric-day").textContent = formatAmount(stats.dayOutput);
     $("#metric-night").textContent = formatAmount(stats.nightOutput);
@@ -995,7 +994,7 @@
         <div class="chart-bars"><span class="bar bar-intake" style="height:${Math.max(stats.intake ? 2 : 0, stats.intake / max * 100)}%"></span><span class="bar bar-output" style="height:${Math.max(stats.output ? 2 : 0, stats.output / max * 100)}%"><i class="bar-night-segment" aria-hidden="true" style="height:${stats.output ? stats.nightOutput / stats.output * 100 : 0}%"></i></span></div>
         <span class="chart-label">${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit" })}</span>
       </div>`).join("");
-    $("#comparison-table").innerHTML = [...rows].reverse().map(({ key, stats }) => `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.after20)}</td><td>${formatAmount(stats.beforeSleep)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatPercent(stats.nightShare)}</td><td>${stats.dayVisits}/${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td><td>${formatAmount(stats.maximum)}</td></tr>`).join("");
+    $("#comparison-table").innerHTML = [...rows].reverse().map(({ key, stats }) => `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit" })}</td><td>${formatAmount(stats.intake)}</td><td>${formatAmount(stats.beforeSleep)}</td><td>${formatAmount(stats.dayOutput)}</td><td>${formatAmount(stats.nightOutput)}</td><td>${formatPercent(stats.nightShare)}</td><td>${stats.dayVisits}/${stats.nightVisits}</td><td>${formatAmount(stats.average)}</td><td>${formatAmount(stats.maximum)}</td></tr>`).join("");
   }
 
   function renderDoctor() {
@@ -1045,8 +1044,8 @@
       ["Ø Nachturin", completeValue(formatAmount(total.nightOutput / completeDayCount))],
       ["Nachtanteil", completeValue(formatPercent(total.nightShare))],
       ["Ø Nachtgänge", completeValue(formatCount(total.nightVisits / completeDayCount))],
-      ["Ø Entleerung", completeValue(formatAmount(total.average))],
-      ["Max. Entleerung", completeValue(formatAmount(total.maximum))]
+      ["Ø Urin je Gang", completeValue(formatAmount(total.average))],
+      ["Max. Urin je Gang", completeValue(formatAmount(total.maximum))]
     ].map(([label, value], index) => `<article class="doctor-stat${index === 4 ? " doctor-stat-focus" : ""}"><span>${label}</span><strong>${value}</strong></article>`).join("");
 
     const chartMaximum = Math.max(1, ...dailyRows.flatMap((row) => [row.stats.intake, row.stats.output]));
@@ -1084,14 +1083,14 @@
     }).join("") : '<tr><td colspan="9">Keine Mengenangaben im gewählten Zeitraum.</td></tr>';
     $("#doctor-urgency").innerHTML = ["leicht", "mittel", "stark"].map((level) => {
       const item = total.urgency[level];
-      return `<article class="urgency-stat"><span>${urgencyLabel(level)}</span><strong>${item.count}× · Ø ${formatAmount(item.average)}</strong></article>`;
+      return `<article class="urgency-stat"><span>${urgencyLabel(level)}</span><strong>${item.count}× · Ø Urin ${formatAmount(item.average)}</strong></article>`;
     }).join("");
     $("#doctor-additional").innerHTML = measuredRows.length ? measuredRows.map(({ key, stats, sleepWindow }) => {
       const sleepTime = sleepWindow.start ? formatDate(sleepWindow.start.occurred_at, { hour: "2-digit", minute: "2-digit" }) : state.nightStart;
       const wakeTime = sleepWindow.wake ? formatDate(sleepWindow.wake.occurred_at, { hour: "2-digit", minute: "2-digit" }) : state.nightEnd;
       const basis = sleepWindow.basis === "recorded" ? "Individuell" : (sleepWindow.basis === "partial" ? "Unvollständig" : "Ersatzzeit");
-      return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.after20)}</td><td>${formatAmount(stats.beforeSleep)}</td><td>${sleepTime} Uhr</td><td>${wakeTime} Uhr</td><td><span class="basis-badge ${sleepWindow.basis}">${basis}</span></td></tr>`;
-    }).join("") : '<tr><td colspan="6">Keine Zusatzdaten im gewählten Zeitraum.</td></tr>';
+      return `<tr><td>${formatDate(dateFromKey(key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${formatAmount(stats.beforeSleep)}</td><td>${sleepTime} Uhr</td><td>${wakeTime} Uhr</td><td><span class="basis-badge ${sleepWindow.basis}">${basis}</span></td></tr>`;
+    }).join("") : '<tr><td colspan="5">Keine Zusatzdaten im gewählten Zeitraum.</td></tr>';
     const contexts = activeDailyContexts().filter((context) => context.day_key >= from && context.day_key <= to && (context.note || context.tags.length));
     $("#doctor-contexts").innerHTML = contexts.length ? contexts.sort((a, b) => a.day_key.localeCompare(b.day_key)).map((context) => `
       <tr><td>${formatDate(dateFromKey(context.day_key), { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td><td>${escapeHtml(context.tags.map((tag) => DAILY_TAG_LABELS[tag]).filter(Boolean).join(", ") || "–")}</td><td>${escapeHtml(context.note || "–")}</td></tr>`).join("") : '<tr><td colspan="3">Keine Tagesfaktoren oder Tagesnotizen in diesem Zeitraum.</td></tr>';
