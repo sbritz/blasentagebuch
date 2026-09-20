@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=28" />
+    <link rel="stylesheet" href="./app.css?v=29" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=28"></script>
+    <script defer src="./app.js?v=29"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -83,11 +83,17 @@
           </div>
 
           <form id="entry-form" novalidate>
-            <div id="entry-suggestion-wrap" class="field entry-suggestion" hidden>
-              <label for="entry-suggestion">Frühere Eingabe übernehmen <span>(optional)</span></label>
-              <select id="entry-suggestion">
-                <option value="">Frühere Eingabe auswählen …</option>
-              </select>
+            <div id="entry-suggestion-wrap" class="entry-suggestion" hidden>
+              <button id="repeat-last-entry" class="repeat-last-entry" type="button">
+                <span>↻ Letzten Eintrag wiederholen</span>
+                <strong id="repeat-last-entry-detail"></strong>
+              </button>
+              <div id="older-entry-suggestions" class="field">
+                <label for="entry-suggestion">Andere frühere Eingabe <span>(optional)</span></label>
+                <select id="entry-suggestion">
+                  <option value="">Frühere Eingabe auswählen …</option>
+                </select>
+              </div>
             </div>
             <div id="vessel-picker-wrap" class="vessel-picker-wrap" hidden>
               <div class="field-label-row"><span class="control-label">Gefäß antippen</span><button id="manage-vessels-button" class="inline-action" type="button">Gefäße verwalten</button></div>
@@ -95,13 +101,15 @@
             </div>
             <div id="drink-preset-wrap" class="field">
               <div class="field-label-row"><label for="drink-preset">Getränk</label><button id="manage-drinks-button" class="inline-action" type="button">Verwalten</button></div>
-              <select id="drink-preset" name="drinkPreset"></select>
+              <select id="drink-preset" name="drinkPreset" aria-describedby="drink-preset-error"></select>
+              <small id="drink-preset-error" class="field-error" hidden></small>
             </div>
             <div id="meal-fields" class="meal-fields" hidden>
               <div class="field">
                 <label for="meal-name">Mahlzeit</label>
-                <textarea id="meal-name" class="meal-description" maxlength="500" rows="4" aria-describedby="meal-name-counter" placeholder="z. B. große Gemüsepfanne mit Reis und anschließend 500 g Skyr"></textarea>
+                <textarea id="meal-name" class="meal-description" maxlength="500" rows="4" aria-describedby="meal-name-counter meal-name-error" placeholder="z. B. große Gemüsepfanne mit Reis und anschließend 500 g Skyr"></textarea>
                 <small id="meal-name-counter" class="character-counter" aria-live="polite">500 Zeichen übrig</small>
+                <small id="meal-name-error" class="field-error" hidden></small>
               </div>
               <fieldset class="choice-field tag-field">
                 <legend>Merkmale <span>(optional)</span></legend>
@@ -117,9 +125,10 @@
               <div class="field amount-field">
                 <label for="amount">Menge</label>
                 <div class="input-suffix">
-                  <input id="amount" name="amount" type="number" min="1" max="5000" step="10" inputmode="numeric" placeholder="ml eingeben" required />
+                  <input id="amount" name="amount" type="number" min="1" max="5000" step="1" inputmode="numeric" placeholder="ml eingeben" aria-describedby="amount-error" required />
                   <span>ml</span>
                 </div>
+                <small id="amount-error" class="field-error" hidden></small>
               </div>
             </div>
             <fieldset id="urgency-wrap" class="choice-field" hidden>
@@ -129,6 +138,7 @@
                 <label><input type="radio" name="urgency" value="mittel" /><span>Mittel</span></label>
                 <label><input type="radio" name="urgency" value="stark" /><span>Stark</span></label>
               </div>
+              <small id="urgency-error" class="field-error" hidden></small>
             </fieldset>
             <details class="more-fields">
               <summary><span>Zeitpunkt & Notiz</span><strong id="entry-time-summary">Jetzt</strong></summary>
@@ -139,6 +149,7 @@
                     <label class="date-time-field" for="occurred-date"><span>Datum</span><input id="occurred-date" name="occurredDate" type="date" required /></label>
                     <label class="date-time-field" for="occurred-time"><span>Uhrzeit</span><input id="occurred-time" name="occurredTime" type="time" step="60" required /></label>
                   </div>
+                  <small id="occurred-at-error" class="field-error" hidden></small>
                 </div>
                 <div class="field note-field">
                   <label for="note">Notiz <span>(optional)</span></label>
@@ -302,112 +313,124 @@
 
       <section id="view-settings" class="view" data-view="settings" aria-labelledby="nav-settings" hidden>
         <div class="page-heading"><div><span class="eyebrow">Konto & App</span><h2>Einstellungen</h2></div></div>
-        <section class="settings-card">
-          <h3>Darstellung</h3>
-          <p class="settings-copy">Automatisch übernimmt die Hell-/Dunkel-Einstellung deines Geräts.</p>
-          <div class="theme-options" role="group" aria-label="Darstellung auswählen">
-            <button type="button" data-theme-mode="auto"><strong>Automatisch</strong><span>Wie das Gerät</span></button>
-            <button type="button" data-theme-mode="light"><strong>Hell</strong><span>Heller Hintergrund</span></button>
-            <button type="button" data-theme-mode="dark"><strong>Dunkel</strong><span>Für die Nacht</span></button>
-          </div>
-        </section>
-        <section class="settings-card">
-          <h3>Synchronisation</h3>
-          <p class="settings-copy">Mit Supabase werden deine Einträge verschlüsselt übertragen und zwischen deinen Geräten synchronisiert. Der öffentliche Publishable Key darf in der App stehen; ein Secret Key niemals.</p>
-          <form id="auth-signed-out">
-            <div class="form-grid">
-              <div class="field"><label for="supabase-url">Supabase Projekt-URL</label><input id="supabase-url" type="url" placeholder="https://….supabase.co" autocomplete="url" /></div>
-              <div class="field"><label for="supabase-key">Öffentlicher Publishable Key</label><input id="supabase-key" type="text" placeholder="sb_publishable_…" autocomplete="off" spellcheck="false" /></div>
-              <div class="field"><label for="auth-email">E-Mail</label><input id="auth-email" type="email" autocomplete="email" /></div>
-              <div class="field"><label for="auth-password">Passwort</label><input id="auth-password" type="password" minlength="8" autocomplete="current-password" /></div>
-            </div>
-            <div class="button-row">
-              <button id="sign-in-button" class="primary-button small" type="submit">Anmelden & synchronisieren</button>
-              <button id="sign-up-button" class="secondary-button" type="button">Konto anlegen</button>
-            </div>
-          </form>
-          <div id="auth-signed-in" hidden>
-            <p>Angemeldet als <strong id="account-email"></strong></p>
-            <div class="button-row"><button id="sync-now-button" class="primary-button small" type="button">Jetzt synchronisieren</button><button id="sign-out-button" class="secondary-button" type="button">Abmelden</button></div>
-          </div>
-          <p id="auth-message" class="inline-message" role="status"></p>
-        </section>
-
-        <section id="drink-settings-card" class="settings-card">
-          <h3>Getränke verwalten</h3>
-          <p class="settings-copy">Hier verwaltest du nur die Getränketypen. Die Menge legst du bei jedem Eintrag einzeln fest. Löschen ist nur möglich, solange das Getränk noch nicht verwendet wurde.</p>
-          <div id="preset-list" class="preset-list"></div>
-          <form id="preset-form" class="preset-form">
-            <input id="preset-edit-id" type="hidden" />
-            <h4 id="preset-form-heading">Neues Getränk</h4>
-            <div class="field"><label for="preset-name">Name</label><input id="preset-name" maxlength="40" placeholder="z. B. Kräutertee" required /></div>
-            <div class="preset-form-actions">
-              <button id="preset-cancel-button" class="text-button" type="button" hidden>Abbrechen</button>
-              <button id="preset-save-button" class="secondary-button" type="submit">Hinzufügen</button>
-            </div>
-          </form>
-        </section>
-
-        <section id="vessel-settings-card" class="settings-card">
-          <h3>Trinkgefäße mit Foto</h3>
-          <p class="settings-copy">Lege Tassen, Gläser oder Flaschen einmal mit ihrer Füllmenge an. Beim Trinken genügt danach ein Tipp auf das Foto.</p>
-          <div id="vessel-list" class="vessel-list"></div>
-          <form id="vessel-form" class="vessel-form">
-            <div class="field"><label for="vessel-name">Name</label><input id="vessel-name" maxlength="40" placeholder="z. B. großes Wasserglas" required /></div>
-            <div class="field"><label for="vessel-amount">Füllmenge</label><div class="input-suffix"><input id="vessel-amount" type="number" min="10" max="5000" step="1" inputmode="numeric" placeholder="z. B. 265" required /><span>ml</span></div></div>
-            <div class="field">
-              <span class="control-label">Foto</span>
-              <div class="photo-source-actions">
-                <input id="vessel-photo-library" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" />
-                <label class="secondary-button photo-source-button" for="vessel-photo-library">▧ Aus Mediathek wählen</label>
-                <input id="vessel-photo-camera" class="sr-only" type="file" accept="image/*" capture="environment" />
-                <label class="secondary-button photo-source-button" for="vessel-photo-camera">◉ Foto aufnehmen</label>
+        <details id="settings-account-group" class="settings-group">
+          <summary><span aria-hidden="true">◎</span><span><strong>Konto & Synchronisation</strong><small>Anmeldung und Geräteabgleich</small></span></summary>
+          <div class="settings-group-content">
+            <section class="settings-card">
+              <h3>Synchronisation</h3>
+              <p class="settings-copy">Mit Supabase werden deine Einträge verschlüsselt übertragen und zwischen deinen Geräten synchronisiert. Der öffentliche Publishable Key darf in der App stehen; ein Secret Key niemals.</p>
+              <form id="auth-signed-out">
+                <div class="form-grid">
+                  <div class="field"><label for="supabase-url">Supabase Projekt-URL</label><input id="supabase-url" type="url" placeholder="https://….supabase.co" autocomplete="url" /></div>
+                  <div class="field"><label for="supabase-key">Öffentlicher Publishable Key</label><input id="supabase-key" type="text" placeholder="sb_publishable_…" autocomplete="off" spellcheck="false" /></div>
+                  <div class="field"><label for="auth-email">E-Mail</label><input id="auth-email" type="email" autocomplete="email" /></div>
+                  <div class="field"><label for="auth-password">Passwort</label><input id="auth-password" type="password" minlength="8" autocomplete="current-password" /></div>
+                </div>
+                <div class="button-row">
+                  <button id="sign-in-button" class="primary-button small" type="submit">Anmelden & synchronisieren</button>
+                  <button id="sign-up-button" class="secondary-button" type="button">Konto anlegen</button>
+                </div>
+              </form>
+              <div id="auth-signed-in" hidden>
+                <p>Angemeldet als <strong id="account-email"></strong></p>
+                <div class="button-row"><button id="sync-now-button" class="primary-button small" type="button">Jetzt synchronisieren</button><button id="sign-out-button" class="secondary-button" type="button">Abmelden</button></div>
               </div>
-              <small id="vessel-photo-selection">Noch kein Foto ausgewählt.</small>
-            </div>
-            <img id="vessel-preview" class="vessel-preview" alt="Vorschau des Trinkgefäßes" hidden />
-            <button class="secondary-button" type="submit">Gefäß speichern</button>
-          </form>
-          <p id="vessel-status" class="inline-message" role="status"></p>
-        </section>
-
-        <section class="settings-card">
-          <h3>Nachtzeit</h3>
-          <p class="settings-copy">Diese Uhrzeiten dienen nur noch als Ersatz für ältere Tage ohne erfasste Schlaf- und Aufstehzeiten. Frühmorgendliche Einträge gehören dabei zum vorherigen Messtag.</p>
-          <div class="time-settings">
-            <label>Beginn <input id="night-start" type="time" value="22:00" /></label>
-            <label>Ende <input id="night-end" type="time" value="06:00" /></label>
+              <p id="auth-message" class="inline-message" role="status"></p>
+            </section>
           </div>
-          <p id="night-settings-status" class="inline-message" role="status"></p>
-        </section>
+        </details>
 
-        <section id="sleep-events-card" class="settings-card">
-          <h3>Schlaf- und Aufstehzeiten</h3>
-          <p class="settings-copy">Für eine medizinisch genauere Auswertung kannst du Zeiten nachtragen oder korrigieren. Der erste Toilettengang nach „Aufgestanden“ wird als Morgenurin der vorherigen Nacht gewertet.</p>
-          <form id="sleep-event-form" class="sleep-event-form">
-            <input id="sleep-event-edit-id" type="hidden" />
-            <div class="field">
-              <label for="sleep-event-kind">Ereignis</label>
-              <select id="sleep-event-kind"><option value="sleep_start">Schlafen gegangen</option><option value="wake_up">Aufgestanden</option></select>
-            </div>
-            <div class="date-time-fields">
-              <label class="date-time-field" for="sleep-event-date"><span>Datum</span><input id="sleep-event-date" type="date" required /></label>
-              <label class="date-time-field" for="sleep-event-time"><span>Uhrzeit</span><input id="sleep-event-time" type="time" step="60" required /></label>
-            </div>
-            <div class="preset-form-actions">
-              <button id="sleep-event-cancel-button" class="text-button" type="button" hidden>Abbrechen</button>
-              <button id="sleep-event-save-button" class="secondary-button" type="submit">Zeit nachtragen</button>
-            </div>
-          </form>
-          <p id="sleep-events-status" class="inline-message" role="status"></p>
-          <div id="sleep-event-list" class="preset-list sleep-event-list"></div>
-        </section>
+        <details id="settings-drinks-group" class="settings-group">
+          <summary><span aria-hidden="true">◉</span><span><strong>Getränke & Trinkgefäße</strong><small>Getränketypen, Fotos und Füllmengen</small></span></summary>
+          <div class="settings-group-content">
+            <section id="drink-settings-card" class="settings-card">
+              <h3>Getränke verwalten</h3>
+              <p class="settings-copy">Hier verwaltest du nur die Getränketypen. Die Menge legst du bei jedem Eintrag einzeln fest. Löschen ist nur möglich, solange das Getränk noch nicht verwendet wurde.</p>
+              <div id="preset-list" class="preset-list"></div>
+              <form id="preset-form" class="preset-form">
+                <input id="preset-edit-id" type="hidden" />
+                <h4 id="preset-form-heading">Neues Getränk</h4>
+                <div class="field"><label for="preset-name">Name</label><input id="preset-name" maxlength="40" placeholder="z. B. Kräutertee" required /></div>
+                <div class="preset-form-actions">
+                  <button id="preset-cancel-button" class="text-button" type="button" hidden>Abbrechen</button>
+                  <button id="preset-save-button" class="secondary-button" type="submit">Hinzufügen</button>
+                </div>
+              </form>
+            </section>
+            <section id="vessel-settings-card" class="settings-card">
+              <h3>Trinkgefäße mit Foto</h3>
+              <p class="settings-copy">Lege Tassen, Gläser oder Flaschen einmal mit ihrer Füllmenge an. Beim Trinken genügt danach ein Tipp auf das Foto.</p>
+              <div id="vessel-list" class="vessel-list"></div>
+              <form id="vessel-form" class="vessel-form">
+                <div class="field"><label for="vessel-name">Name</label><input id="vessel-name" maxlength="40" placeholder="z. B. großes Wasserglas" required /></div>
+                <div class="field"><label for="vessel-amount">Füllmenge</label><div class="input-suffix"><input id="vessel-amount" type="number" min="10" max="5000" step="1" inputmode="numeric" placeholder="z. B. 265" required /><span>ml</span></div></div>
+                <div class="field">
+                  <span class="control-label">Foto</span>
+                  <div class="photo-source-actions">
+                    <input id="vessel-photo-library" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" />
+                    <label class="secondary-button photo-source-button" for="vessel-photo-library">▧ Aus Mediathek wählen</label>
+                    <input id="vessel-photo-camera" class="sr-only" type="file" accept="image/*" capture="environment" />
+                    <label class="secondary-button photo-source-button" for="vessel-photo-camera">◉ Foto aufnehmen</label>
+                  </div>
+                  <small id="vessel-photo-selection">Noch kein Foto ausgewählt.</small>
+                </div>
+                <img id="vessel-preview" class="vessel-preview" alt="Vorschau des Trinkgefäßes" hidden />
+                <button class="secondary-button" type="submit">Gefäß speichern</button>
+              </form>
+              <p id="vessel-status" class="inline-message" role="status"></p>
+            </section>
+          </div>
+        </details>
 
-        <section class="settings-card danger-zone">
-          <h3>Lokale Daten</h3>
-          <p class="settings-copy">Exportiere eine Sicherung oder lösche die Daten dieses Geräts. Synchronisierte Daten in Supabase bleiben beim lokalen Löschen erhalten.</p>
-          <div class="button-row"><button id="export-button" class="secondary-button" type="button">JSON exportieren</button><button id="clear-button" class="danger-button" type="button">Lokale Daten löschen</button></div>
-        </section>
+        <details id="settings-sleep-group" class="settings-group">
+          <summary><span aria-hidden="true">☾</span><span><strong>Schlaf & Nachtzeiten</strong><small>Persönliche Nachtphase und Korrekturen</small></span></summary>
+          <div class="settings-group-content">
+            <section class="settings-card">
+              <h3>Nachtzeit</h3>
+              <p class="settings-copy">Diese Uhrzeiten dienen nur noch als Ersatz für ältere Tage ohne erfasste Schlaf- und Aufstehzeiten. Frühmorgendliche Einträge gehören dabei zum vorherigen Messtag.</p>
+              <div class="time-settings">
+                <label>Beginn <input id="night-start" type="time" value="22:00" /></label>
+                <label>Ende <input id="night-end" type="time" value="06:00" /></label>
+              </div>
+              <p id="night-settings-status" class="inline-message" role="status"></p>
+            </section>
+            <section id="sleep-events-card" class="settings-card">
+              <h3>Schlaf- und Aufstehzeiten</h3>
+              <p class="settings-copy">Für eine medizinisch genauere Auswertung kannst du Zeiten nachtragen oder korrigieren. Der erste Toilettengang nach „Aufgestanden“ wird als Morgenurin der vorherigen Nacht gewertet.</p>
+              <form id="sleep-event-form" class="sleep-event-form">
+                <input id="sleep-event-edit-id" type="hidden" />
+                <div class="field"><label for="sleep-event-kind">Ereignis</label><select id="sleep-event-kind"><option value="sleep_start">Schlafen gegangen</option><option value="wake_up">Aufgestanden</option></select></div>
+                <div class="date-time-fields">
+                  <label class="date-time-field" for="sleep-event-date"><span>Datum</span><input id="sleep-event-date" type="date" required /></label>
+                  <label class="date-time-field" for="sleep-event-time"><span>Uhrzeit</span><input id="sleep-event-time" type="time" step="60" required /></label>
+                </div>
+                <div class="preset-form-actions"><button id="sleep-event-cancel-button" class="text-button" type="button" hidden>Abbrechen</button><button id="sleep-event-save-button" class="secondary-button" type="submit">Zeit nachtragen</button></div>
+              </form>
+              <p id="sleep-events-status" class="inline-message" role="status"></p>
+              <div id="sleep-event-list" class="preset-list sleep-event-list"></div>
+            </section>
+          </div>
+        </details>
+
+        <details id="settings-display-group" class="settings-group">
+          <summary><span aria-hidden="true">◐</span><span><strong>Darstellung & Datensicherung</strong><small>Design, Export und lokale Daten</small></span></summary>
+          <div class="settings-group-content">
+            <section class="settings-card">
+              <h3>Darstellung</h3>
+              <p class="settings-copy">Automatisch übernimmt die Hell-/Dunkel-Einstellung deines Geräts.</p>
+              <div class="theme-options" role="group" aria-label="Darstellung auswählen">
+                <button type="button" data-theme-mode="auto"><strong>Automatisch</strong><span>Wie das Gerät</span></button>
+                <button type="button" data-theme-mode="light"><strong>Hell</strong><span>Heller Hintergrund</span></button>
+                <button type="button" data-theme-mode="dark"><strong>Dunkel</strong><span>Für die Nacht</span></button>
+              </div>
+            </section>
+            <section class="settings-card danger-zone">
+              <h3>Lokale Daten</h3>
+              <p class="settings-copy">Exportiere eine Sicherung oder lösche die Daten dieses Geräts. Synchronisierte Daten in Supabase bleiben beim lokalen Löschen erhalten.</p>
+              <div class="button-row"><button id="export-button" class="secondary-button" type="button">JSON exportieren</button><button id="clear-button" class="danger-button" type="button">Lokale Daten löschen</button></div>
+            </section>
+          </div>
+        </details>
       </section>
     </main>
 
@@ -454,7 +477,10 @@
       </form>
     </dialog>
 
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="toast" class="toast" role="status" aria-live="polite">
+      <span id="toast-message"></span>
+      <button id="toast-action" type="button" hidden>Rückgängig</button>
+    </div>
     <noscript>Diese App benötigt JavaScript.</noscript>
   </body>
 </html>

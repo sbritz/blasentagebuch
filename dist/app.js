@@ -39,6 +39,7 @@
   let syncInProgress = false;
   let installPrompt = null;
   let toastTimer = null;
+  let toastActionCallback = null;
   let entrySuggestionCache = [];
   let occurredAtManuallySet = false;
   let nightSettingsSyncAvailable = null;
@@ -376,15 +377,19 @@
     entrySuggestionCache = entrySuggestions();
     const wrap = $("#entry-suggestion-wrap");
     const select = $("#entry-suggestion");
-    wrap.hidden = entrySuggestionCache.length === 0;
+    const lastEntry = activeEntries()
+      .filter((entry) => entry.kind === entryKind)
+      .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at))[0] || null;
+    wrap.hidden = !lastEntry;
+    $("#repeat-last-entry").hidden = !lastEntry;
+    $("#repeat-last-entry-detail").textContent = lastEntry ? entrySuggestionLabel({ entry: lastEntry, count: 1 }) : "";
+    $("#older-entry-suggestions").hidden = entrySuggestionCache.length < 2;
     select.innerHTML = '<option value="">Frühere Eingabe auswählen …</option>'
       + entrySuggestionCache.map((suggestion, index) => `<option value="${index}">${escapeHtml(entrySuggestionLabel(suggestion))}</option>`).join("");
   }
 
-  function applyEntrySuggestion(index) {
-    const suggestion = entrySuggestionCache[Number(index)];
-    if (!suggestion) return;
-    const entry = suggestion.entry;
+  function applyEntryValues(entry) {
+    if (!entry) return;
     if (entry.kind === "drink") {
       const preset = activePresets().find((item) => normalizedName(item.name) === normalizedName(entry.drink_name));
       if (preset) $("#drink-preset").value = preset.id;
@@ -399,7 +404,23 @@
       updateCharacterCounter("#meal-name", "#meal-name-counter", MEAL_NAME_MAX_LENGTH);
       setCheckboxValues("meal-tags", entry.tags || []);
     }
+  }
+
+  function applyEntrySuggestion(index) {
+    const suggestion = entrySuggestionCache[Number(index)];
+    if (!suggestion) return;
+    applyEntryValues(suggestion.entry);
     showToast("Frühere Eingabe übernommen");
+  }
+
+  function repeatLastEntry() {
+    const entry = activeEntries()
+      .filter((item) => item.kind === entryKind)
+      .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at))[0];
+    if (!entry) return;
+    applyEntryValues(entry);
+    $("#entry-suggestion").value = "";
+    showToast("Letzten Eintrag übernommen");
   }
 
   function activeSleepEvents() {
@@ -594,12 +615,69 @@
     return activeEntries().filter((entry) => classifyEntry(entry).dayKey === key);
   }
 
-  function showToast(message) {
+  function showToast(message, options = {}) {
     const toast = $("#toast");
-    toast.textContent = message;
+    const action = $("#toast-action");
+    $("#toast-message").textContent = message;
+    toastActionCallback = typeof options.onAction === "function" ? options.onAction : null;
+    action.textContent = options.actionLabel || "Rückgängig";
+    action.hidden = !toastActionCallback;
     toast.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+    toastTimer = setTimeout(() => {
+      toast.classList.remove("show");
+      toastActionCallback = null;
+      action.hidden = true;
+    }, options.duration || (toastActionCallback ? 8000 : 3200));
+  }
+
+  function clearEntryErrors() {
+    ["#drink-preset", "#amount", "#meal-name", "#occurred-date", "#occurred-time"].forEach((selector) => $(selector)?.removeAttribute("aria-invalid"));
+    $("#urgency-wrap").classList.remove("has-error");
+    ["#drink-preset-error", "#amount-error", "#meal-name-error", "#urgency-error", "#occurred-at-error"].forEach((selector) => {
+      const message = $(selector);
+      if (message) { message.textContent = ""; message.hidden = true; }
+    });
+    $("#form-error").textContent = "";
+  }
+
+  function showEntryError(controlSelector, messageSelector, message) {
+    const control = $(controlSelector);
+    const target = $(messageSelector);
+    control?.setAttribute("aria-invalid", "true");
+    if (target) { target.textContent = message; target.hidden = false; }
+  }
+
+  function validateEntryForm(preset, urgency) {
+    clearEntryErrors();
+    let firstInvalid = null;
+    const mark = (controlSelector, messageSelector, message) => {
+      showEntryError(controlSelector, messageSelector, message);
+      firstInvalid ||= $(controlSelector);
+    };
+    if (entryKind === "drink" && !preset) mark("#drink-preset", "#drink-preset-error", "Bitte ein Getränk auswählen oder neu anlegen.");
+    const amount = Number($("#amount").value);
+    if (entryKind !== "meal" && (!Number.isFinite(amount) || amount < 1 || amount > 5000)) {
+      mark("#amount", "#amount-error", "Bitte eine Menge zwischen 1 und 5.000 ml eingeben.");
+    }
+    if (entryKind === "meal" && !$("#meal-name").value.trim()) {
+      mark("#meal-name", "#meal-name-error", "Bitte die Mahlzeit kurz beschreiben.");
+    }
+    if (entryKind === "urination" && !urgency) {
+      $("#urgency-wrap").classList.add("has-error");
+      const message = $("#urgency-error");
+      message.textContent = "Bitte den Harndrang auswählen.";
+      message.hidden = false;
+      firstInvalid ||= $("#urgency-wrap input");
+    }
+    if (!$("#occurred-date").value || !$("#occurred-time").value) {
+      showEntryError("#occurred-date", "#occurred-at-error", "Bitte Datum und Uhrzeit vollständig angeben.");
+      $("#occurred-time").setAttribute("aria-invalid", "true");
+      firstInvalid ||= $("#occurred-date");
+      $(".more-fields").open = true;
+    }
+    firstInvalid?.focus();
+    return !firstInvalid;
   }
 
   function setKind(kind) {
@@ -729,6 +807,7 @@
 
   function openDrinkManagement(createNew = false) {
     navigate("settings");
+    $("#settings-drinks-group").open = true;
     $("#drink-settings-card").scrollIntoView({ behavior: "smooth", block: "start" });
     if (createNew) resetPresetForm(true);
   }
@@ -1582,6 +1661,7 @@
 
   function bindEvents() {
     $$(".type-option").forEach((button) => button.addEventListener("click", () => setKind(button.dataset.kind)));
+    $("#repeat-last-entry").addEventListener("click", repeatLastEntry);
     $(".quick-amounts")?.addEventListener("click", (event) => {
       const button = event.target.closest("button[data-amount]");
       if (!button) return;
@@ -1624,6 +1704,7 @@
     $("#manage-drinks-button").addEventListener("click", () => openDrinkManagement(false));
     $("#manage-vessels-button").addEventListener("click", () => {
       navigate("settings");
+      $("#settings-drinks-group").open = true;
       $("#vessel-settings-card").scrollIntoView({ behavior: "smooth", block: "start" });
     });
     $("#vessel-picker").addEventListener("click", (event) => {
@@ -1639,13 +1720,11 @@
     $("#entry-form").addEventListener("submit", (event) => {
       event.preventDefault();
       const error = $("#form-error");
-      error.textContent = "";
       try {
         refreshCurrentEntryTime();
         const preset = activePresets().find((item) => item.id === $("#drink-preset").value);
-        if (entryKind === "drink" && !preset) throw new Error("Bitte zuerst ein Getränk anlegen oder auswählen.");
         const urgency = selectedRadioValue("urgency");
-        if (entryKind === "urination" && !urgency) throw new Error("Bitte den Harndrang auswählen: leicht, mittel oder stark.");
+        if (!validateEntryForm(preset, urgency)) return;
         const savedEntry = saveEntry({
           kind: entryKind,
           amount_ml: $("#amount").value,
@@ -1657,9 +1736,16 @@
           note: $("#note").value
         });
         const classification = classifyEntry(savedEntry);
-        showToast(classification.morningVoid
+        const savedMessage = classification.morningVoid
           ? `Morgenurin gespeichert und Messtag ${formatDate(dateFromKey(classification.dayKey), { day: "2-digit", month: "2-digit" })} zugeordnet.`
-          : (entryKind === "drink" ? "Getränk gespeichert" : (entryKind === "meal" ? "Mahlzeit gespeichert" : "Toilettengang gespeichert")));
+          : (entryKind === "drink" ? "Getränk gespeichert" : (entryKind === "meal" ? "Mahlzeit gespeichert" : "Toilettengang gespeichert"));
+        showToast(`✓ ${savedMessage}`, {
+          actionLabel: "Rückgängig",
+          onAction: () => {
+            deleteEntry(savedEntry.id);
+            showToast("Eintrag zurückgenommen");
+          }
+        });
         $("#amount").value = "";
         $("#meal-name").value = "";
         updateCharacterCounter("#meal-name", "#meal-name-counter", MEAL_NAME_MAX_LENGTH);
@@ -1671,9 +1757,12 @@
         refreshCurrentEntryTime(true);
       } catch (exception) { error.textContent = exception.message; }
     });
+    $("#entry-form").addEventListener("input", (event) => {
+      if (event.target.matches("input, select, textarea")) clearEntryErrors();
+    });
     $$(".bottom-nav button").forEach((button) => button.addEventListener("click", () => navigate(button.dataset.target)));
     $("#go-all-entries").addEventListener("click", () => { $("#compare-days").value = "30"; navigate("compare"); });
-    $("#sync-button").addEventListener("click", () => navigate("settings"));
+    $("#sync-button").addEventListener("click", () => { navigate("settings"); $("#settings-account-group").open = true; });
     $("#comparison-days")?.addEventListener("change", renderComparison);
     $("#compare-days").addEventListener("change", renderComparison);
     $("#today-timeline").addEventListener("click", (event) => {
@@ -1723,7 +1812,20 @@
     $("#wake-up-button").addEventListener("click", () => recordPhaseEvent("wake_up"));
     $("#manage-sleep-events-button").addEventListener("click", () => {
       navigate("settings");
+      $("#settings-sleep-group").open = true;
       $("#sleep-events-card").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    $$(".settings-group").forEach((group) => group.addEventListener("toggle", () => {
+      if (!group.open) return;
+      $$(".settings-group").forEach((other) => { if (other !== group) other.open = false; });
+    }));
+    $("#toast-action").addEventListener("click", () => {
+      const callback = toastActionCallback;
+      toastActionCallback = null;
+      clearTimeout(toastTimer);
+      $("#toast").classList.remove("show");
+      $("#toast-action").hidden = true;
+      callback?.();
     });
     $("#night-start").addEventListener("change", saveNightSettingsFromForm);
     $("#night-end").addEventListener("change", saveNightSettingsFromForm);
