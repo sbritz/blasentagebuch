@@ -2,7 +2,7 @@
 -- In einem bereits eingerichteten Supabase-Projekt einmal im SQL Editor ausführen.
 
 alter table public.diary_entries
-  add column if not exists meal_name text check (char_length(meal_name) <= 80),
+  add column if not exists meal_name text check (char_length(meal_name) <= 500),
   add column if not exists tags text[] not null default '{}';
 
 alter table public.diary_entries alter column amount_ml drop not null;

@@ -8,7 +8,7 @@ create table if not exists public.diary_entries (
   amount_ml integer check ((kind = 'meal' and amount_ml is null) or (kind in ('drink', 'urination') and amount_ml between 1 and 5000)),
   occurred_at timestamptz not null,
   drink_name text check (char_length(drink_name) <= 60),
-  meal_name text check (char_length(meal_name) <= 80),
+  meal_name text check (char_length(meal_name) <= 500),
   tags text[] not null default '{}',
   note text check (char_length(note) <= 160),
   created_at timestamptz not null default now(),

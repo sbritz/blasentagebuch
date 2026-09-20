@@ -227,6 +227,9 @@ input, select, textarea {
   color: var(--ink);
 }
 textarea { resize: vertical; }
+.meal-description { min-height: 7rem; line-height: 1.5; }
+.character-counter { align-self: flex-end; color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; }
+.character-counter.near-limit { color: var(--warning); font-weight: 750; }
 input:focus, select:focus, textarea:focus, button:focus-visible, summary:focus-visible { outline: 3px solid rgba(31, 130, 115, .22); outline-offset: 2px; border-color: var(--brand); }
 .input-suffix { position: relative; }
 .input-suffix input { padding-right: 3rem; }

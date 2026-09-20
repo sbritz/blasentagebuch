@@ -57,6 +57,7 @@ Wer das Projekt bereits eingerichtet hat, führt im Supabase SQL Editor einmal d
 2. `supabase/add-sleep-events.sql` für Schlaf- und Aufstehzeiten.
 3. `supabase/add-meals-and-daily-context.sql` für Mahlzeiten, Tagesfaktoren und Tagesnotizen.
 4. `supabase/add-drink-vessels.sql` für die geräteübergreifende Synchronisation eigener Trinkgefäße mit Foto.
+5. `supabase/expand-meal-description.sql` für ausführlichere Mahlzeitenbeschreibungen mit bis zu 500 Zeichen.
 
 Danach die App neu laden und unter **Einstellungen → Synchronisation → Jetzt synchronisieren** wählen. Schlafzeiten, Nachtzeit und alle bisherigen Einträge werden dann in Tagesansicht, Vergleich, Arztansicht und PDF nach derselben Messtag-Logik ausgewertet. Für ältere Tage ohne erfasste Schlafzeiten verwendet die App weiterhin die eingestellte Ersatz-Nachtzeit und ordnet frühmorgendliche Einträge dem vorherigen Messtag zu.
 

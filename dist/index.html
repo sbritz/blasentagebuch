@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=24" />
+    <link rel="stylesheet" href="./app.css?v=25" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=24"></script>
+    <script defer src="./app.js?v=25"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -100,7 +100,8 @@
             <div id="meal-fields" class="meal-fields" hidden>
               <div class="field">
                 <label for="meal-name">Mahlzeit</label>
-                <input id="meal-name" type="text" maxlength="80" placeholder="z. B. Gemüsepfanne mit Skyr" />
+                <textarea id="meal-name" class="meal-description" maxlength="500" rows="4" aria-describedby="meal-name-counter" placeholder="z. B. große Gemüsepfanne mit Reis und anschließend 500 g Skyr"></textarea>
+                <small id="meal-name-counter" class="character-counter" aria-live="polite">500 Zeichen übrig</small>
               </div>
               <fieldset class="choice-field tag-field">
                 <legend>Merkmale <span>(optional)</span></legend>
@@ -413,7 +414,7 @@
         <div class="dialog-heading"><h2>Eintrag bearbeiten</h2><button class="icon-button" value="cancel" aria-label="Schließen">×</button></div>
         <input id="edit-id" type="hidden" />
         <div class="field"><label for="edit-kind">Art</label><select id="edit-kind"><option value="drink">Getränk</option><option value="urination">Urinieren</option><option value="meal">Mahlzeit</option></select></div>
-        <div id="edit-name-wrap" class="field"><label id="edit-name-label" for="edit-name">Getränk</label><input id="edit-name" maxlength="80" /></div>
+        <div id="edit-name-wrap" class="field"><label id="edit-name-label" for="edit-name">Getränk</label><input id="edit-name" maxlength="60" /><small id="edit-name-counter" class="character-counter" aria-live="polite" hidden></small></div>
         <div id="edit-amount-wrap" class="field"><label for="edit-amount">Menge</label><div class="input-suffix"><input id="edit-amount" type="number" min="1" max="5000" /><span>ml</span></div></div>
         <fieldset id="edit-meal-tags-wrap" class="choice-field tag-field" hidden>
           <legend>Merkmale <span>(optional)</span></legend>

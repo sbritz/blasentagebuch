@@ -7,6 +7,7 @@
   const DEFAULT_NIGHT_START = "22:00";
   const DEFAULT_NIGHT_END = "06:00";
   const DEFAULT_QUICK_AMOUNTS = [100, 250, 320, 430, 500, 1000];
+  const MEAL_NAME_MAX_LENGTH = 500;
   const MEAL_TAG_LABELS = { prepared: "Fertiggericht", salty: "Salzig", water_rich: "Wasserreich", large_portion: "Große Portion" };
   const DAILY_TAG_LABELS = { cold: "Kältegefühl", kidney_belt: "Nierengurt", sport: "Sport", sweating: "Stark geschwitzt", stress: "Stress" };
   const DEFAULT_PRESETS = [
@@ -223,6 +224,15 @@
     $$(`input[name="${name}"]`).forEach((input) => { input.checked = selected.has(input.value); });
   }
 
+  function updateCharacterCounter(inputSelector, counterSelector, maximum) {
+    const input = $(inputSelector);
+    const counter = $(counterSelector);
+    if (!input || !counter) return;
+    const remaining = Math.max(0, maximum - input.value.length);
+    counter.textContent = `${remaining} Zeichen übrig`;
+    counter.classList.toggle("near-limit", remaining <= 50);
+  }
+
   function updateQuickAmountSelection() {
     const amount = String(Number($("#amount").value || 0));
     $$(".quick-amounts button").forEach((button) => {
@@ -356,7 +366,9 @@
     if (entry.kind === "drink") return `${entry.drink_name || "Getränk"} · ${formatAmount(entry.amount_ml)}${suffix}`;
     if (entry.kind === "urination") return `${formatAmount(entry.amount_ml)} · Harndrang ${urgencyLabel(entry.urgency) || "nicht angegeben"}${suffix}`;
     const tags = (entry.tags || []).map((tag) => MEAL_TAG_LABELS[tag]).filter(Boolean);
-    return `${entry.meal_name || "Mahlzeit"}${tags.length ? ` · ${tags.join(", ")}` : ""}${suffix}`;
+    const name = entry.meal_name || "Mahlzeit";
+    const shortName = name.length > 72 ? `${name.slice(0, 71)}…` : name;
+    return `${shortName}${tags.length ? ` · ${tags.join(", ")}` : ""}${suffix}`;
   }
 
   function renderEntrySuggestions() {
@@ -383,6 +395,7 @@
       updateQuickAmountSelection();
     } else {
       $("#meal-name").value = entry.meal_name || "";
+      updateCharacterCounter("#meal-name", "#meal-name-counter", MEAL_NAME_MAX_LENGTH);
       setCheckboxValues("meal-tags", entry.tags || []);
     }
     showToast("Frühere Eingabe übernommen");
@@ -1185,7 +1198,7 @@
       amount_ml: kind === "meal" ? null : Math.round(amount),
       occurred_at: occurredAt.toISOString(),
       drink_name: kind === "drink" ? String(data.drink_name || "Getränk").trim().slice(0, 60) : null,
-      meal_name: kind === "meal" ? mealName.slice(0, 80) : null,
+      meal_name: kind === "meal" ? mealName.slice(0, MEAL_NAME_MAX_LENGTH) : null,
       tags: kind === "meal" ? (data.tags || []).filter((tag) => MEAL_TAG_LABELS[tag]) : [],
       urgency: kind === "urination" && ["leicht", "mittel", "stark"].includes(data.urgency) ? data.urgency : null,
       note: String(data.note || "").trim().slice(0, 130) || null,
@@ -1219,6 +1232,7 @@
     $("#edit-kind").value = entry.kind;
     updateEditFields();
     $("#edit-name").value = entry.kind === "meal" ? (entry.meal_name || "") : (entry.drink_name || "");
+    if (entry.kind === "meal") updateCharacterCounter("#edit-name", "#edit-name-counter", MEAL_NAME_MAX_LENGTH);
     $("#edit-amount").value = entry.amount_ml || "";
     setSplitDateTime("#edit-date", "#edit-time", new Date(entry.occurred_at));
     $("#edit-note").value = entry.note || "";
@@ -1233,6 +1247,9 @@
     const isMeal = kind === "meal";
     $("#edit-name-wrap").hidden = isUrination;
     $("#edit-name-label").textContent = isMeal ? "Mahlzeit" : "Getränk";
+    $("#edit-name").maxLength = isMeal ? MEAL_NAME_MAX_LENGTH : 60;
+    $("#edit-name-counter").hidden = !isMeal;
+    if (isMeal) updateCharacterCounter("#edit-name", "#edit-name-counter", MEAL_NAME_MAX_LENGTH);
     $("#edit-amount-wrap").hidden = isMeal;
     $("#edit-urgency-wrap").hidden = !isUrination;
     $("#edit-meal-tags-wrap").hidden = !isMeal;
@@ -1531,7 +1548,7 @@
             amount_ml: { type: "integer", minimum: 1, maximum: 5000 },
             occurred_at: { type: "string", description: "ISO-8601-Zeitpunkt; Standard ist jetzt." },
             drink_name: { type: "string", maxLength: 60 },
-            meal_name: { type: "string", maxLength: 80 },
+            meal_name: { type: "string", maxLength: MEAL_NAME_MAX_LENGTH },
             tags: { type: "array", items: { type: "string", enum: Object.keys(MEAL_TAG_LABELS) } },
             urgency: { type: "string", enum: ["leicht", "mittel", "stark"] },
             note: { type: "string", maxLength: 130 }
@@ -1574,6 +1591,7 @@
       updateQuickAmountSelection();
       $$(".vessel-choice").forEach((button) => button.classList.remove("selected"));
     });
+    $("#meal-name").addEventListener("input", () => updateCharacterCounter("#meal-name", "#meal-name-counter", MEAL_NAME_MAX_LENGTH));
     $("#previous-day").addEventListener("click", () => moveDiaryDay(-1));
     $("#next-day").addEventListener("click", () => moveDiaryDay(1));
     $("#return-today").addEventListener("click", () => selectDiaryDay(currentDiaryDayKey(), true));
@@ -1643,6 +1661,7 @@
           : (entryKind === "drink" ? "Getränk gespeichert" : (entryKind === "meal" ? "Mahlzeit gespeichert" : "Toilettengang gespeichert")));
         $("#amount").value = "";
         $("#meal-name").value = "";
+        updateCharacterCounter("#meal-name", "#meal-name-counter", MEAL_NAME_MAX_LENGTH);
         setCheckboxValues("meal-tags", []);
         updateQuickAmountSelection();
         setRadioValue("urgency", null);
@@ -1682,6 +1701,9 @@
       } catch (error) { showToast(error.message); }
     });
     $("#edit-kind").addEventListener("change", updateEditFields);
+    $("#edit-name").addEventListener("input", () => {
+      if ($("#edit-kind").value === "meal") updateCharacterCounter("#edit-name", "#edit-name-counter", MEAL_NAME_MAX_LENGTH);
+    });
     $("#daily-context-form").addEventListener("submit", (event) => {
       event.preventDefault();
       saveDailyContext($("#daily-context-day").value || currentDiaryDayKey(), selectedCheckboxValues("daily-tags"), $("#daily-note").value);
