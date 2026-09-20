@@ -19,9 +19,9 @@
         } catch {}
       })();
     </script>
-    <link rel="stylesheet" href="./app.css?v=22" />
+    <link rel="stylesheet" href="./app.css?v=23" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script defer src="./app.js?v=22"></script>
+    <script defer src="./app.js?v=23"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Zum Inhalt</a>
@@ -45,16 +45,27 @@
 
     <main id="main" class="app-shell">
       <section id="view-today" class="view active" data-view="today" aria-labelledby="nav-today">
-        <div class="capture-card">
+        <section id="day-navigator" class="day-navigator weekday-0" aria-label="Messtag auswählen">
+          <button id="previous-day" type="button" aria-label="Vorheriger Messtag">‹</button>
+          <div class="day-navigator-copy">
+            <span id="selected-day-relative">Heute</span>
+            <strong id="selected-day-weekday">Sonntag</strong>
+            <time id="selected-day-date">20. September 2026</time>
+          </div>
+          <button id="next-day" type="button" aria-label="Nächster Messtag">›</button>
+          <button id="return-today" class="return-today" type="button" hidden>Zu heute</button>
+        </section>
+
+        <div id="capture-card" class="capture-card" data-kind="drink">
           <div class="type-switch" role="radiogroup" aria-label="Art des Eintrags">
             <button class="type-option active" type="button" role="radio" aria-checked="true" data-kind="drink">
-              <span aria-hidden="true">＋</span> Getränk
+              <span class="mode-icon" aria-hidden="true">●</span><span class="mode-label">Trinken</span>
             </button>
             <button class="type-option" type="button" role="radio" aria-checked="false" data-kind="urination">
-              <span aria-hidden="true">↘</span> Urinieren
+              <span class="mode-icon" aria-hidden="true">↘</span><span class="mode-label">Urinieren</span>
             </button>
             <button class="type-option" type="button" role="radio" aria-checked="false" data-kind="meal">
-              <span aria-hidden="true">⌁</span> Mahlzeit
+              <span class="mode-icon" aria-hidden="true">◇</span><span class="mode-label">Essen</span>
             </button>
           </div>
 
@@ -82,6 +93,10 @@
               <label for="drink-preset">Getränk</label>
               <select id="drink-preset" name="drinkPreset"></select>
               <button id="manage-drinks-button" class="manage-drinks-button" type="button">＋ Getränke verwalten</button>
+            </div>
+            <div id="vessel-picker-wrap" class="vessel-picker-wrap" hidden>
+              <div class="field-label-row"><span class="control-label">Mein Trinkgefäß</span><button id="manage-vessels-button" class="inline-action" type="button">Gefäße verwalten</button></div>
+              <div id="vessel-picker" class="vessel-picker" aria-label="Trinkgefäß auswählen"></div>
             </div>
             <div id="meal-fields" class="meal-fields" hidden>
               <div class="field">
@@ -152,17 +167,23 @@
             <h2 id="summary-heading">Heute</h2>
             <span id="today-count" class="muted"></span>
           </div>
-          <div class="metric-grid">
+          <div class="metric-grid metric-grid-primary">
             <article class="metric metric-intake"><span>Getrunken</span><strong id="metric-intake">0 ml</strong></article>
-            <article class="metric metric-intake"><span>Nach 20 Uhr</span><strong id="metric-after-20">0 ml</strong></article>
-            <article class="metric metric-intake"><span>3 h vor Schlaf</span><strong id="metric-before-sleep">0 ml</strong></article>
-            <article class="metric"><span>Urin Tag</span><strong id="metric-day">0 ml</strong></article>
-            <article class="metric metric-night"><span>Urin Nacht</span><strong id="metric-night">0 ml</strong></article>
+            <article class="metric metric-output"><span>Urin gesamt</span><strong id="metric-output">0 ml</strong></article>
             <article class="metric metric-night"><span>Nachtanteil</span><strong id="metric-night-share">–</strong></article>
-            <article class="metric"><span>Toilettengänge</span><strong id="metric-visits">0</strong></article>
-            <article class="metric"><span>Ø Menge</span><strong id="metric-average">0 ml</strong></article>
-            <article class="metric"><span>Max. Entleerung</span><strong id="metric-maximum">0 ml</strong></article>
+            <article class="metric metric-visits"><span>Toilettengänge</span><strong id="metric-visits">0</strong></article>
           </div>
+          <details class="secondary-metrics">
+            <summary>Weitere Tageswerte</summary>
+            <div class="metric-grid metric-grid-secondary">
+              <article class="metric metric-intake"><span>Nach 20 Uhr</span><strong id="metric-after-20">0 ml</strong></article>
+              <article class="metric metric-intake"><span>3 h vor Schlaf</span><strong id="metric-before-sleep">0 ml</strong></article>
+              <article class="metric"><span>Urin Tag</span><strong id="metric-day">0 ml</strong></article>
+              <article class="metric metric-night"><span>Urin Nacht</span><strong id="metric-night">0 ml</strong></article>
+              <article class="metric"><span>Ø Entleerung</span><strong id="metric-average">0 ml</strong></article>
+              <article class="metric"><span>Max. Entleerung</span><strong id="metric-maximum">0 ml</strong></article>
+            </div>
+          </details>
         </section>
 
         <section class="daily-context-card" aria-labelledby="daily-context-heading">
@@ -336,6 +357,20 @@
               <button id="preset-save-button" class="secondary-button" type="submit">Hinzufügen</button>
             </div>
           </form>
+        </section>
+
+        <section id="vessel-settings-card" class="settings-card">
+          <h3>Trinkgefäße mit Foto</h3>
+          <p class="settings-copy">Lege Tassen, Gläser oder Flaschen einmal mit ihrer Füllmenge an. Beim Trinken genügt danach ein Tipp auf das Foto.</p>
+          <div id="vessel-list" class="vessel-list"></div>
+          <form id="vessel-form" class="vessel-form">
+            <div class="field"><label for="vessel-name">Name</label><input id="vessel-name" maxlength="40" placeholder="z. B. großes Wasserglas" required /></div>
+            <div class="field"><label for="vessel-amount">Füllmenge</label><div class="input-suffix"><input id="vessel-amount" type="number" min="10" max="5000" step="10" inputmode="numeric" placeholder="430" required /><span>ml</span></div></div>
+            <div class="field"><label for="vessel-photo">Foto</label><input id="vessel-photo" type="file" accept="image/*" capture="environment" required /></div>
+            <img id="vessel-preview" class="vessel-preview" alt="Vorschau des Trinkgefäßes" hidden />
+            <button class="secondary-button" type="submit">Gefäß speichern</button>
+          </form>
+          <p id="vessel-status" class="inline-message" role="status"></p>
         </section>
 
         <section class="settings-card">

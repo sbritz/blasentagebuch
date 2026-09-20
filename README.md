@@ -6,6 +6,9 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 
 - Schnellerfassung für `Getränk`, `Urinieren` und frei benannte Mahlzeiten mit automatischer, editierbarer Uhrzeit
 - häufige frühere Eingaben lassen sich bei allen drei Eintragstypen mit „Schnell wiederholen“ vollständig übernehmen und vor dem Speichern anpassen
+- wischbare Tagesansicht mit farbigem Wochentag, feststehendem Datum sowie Bearbeiten und Löschen vergangener Einträge
+- klar farbcodierte Eingabemodi für Trinken, Urinieren und Essen
+- eigene Trinkgefäße mit komprimiertem Foto und fester Füllmenge als Ein-Klick-Auswahl
 - optionale Mahlzeiten-Tags für Fertiggericht, salzig, wasserreich und große Portion
 - laufend aktualisierte Uhrzeit, solange sie für den aktuellen Eintrag nicht manuell geändert wurde
 - mitgelieferte und eigene Getränketypen, jeweils bearbeitbar
@@ -53,6 +56,7 @@ Wer das Projekt bereits eingerichtet hat, führt im Supabase SQL Editor einmal d
 1. `supabase/add-user-settings.sql` für die geräteübergreifende Ersatz-Nachtzeit, falls noch nicht geschehen.
 2. `supabase/add-sleep-events.sql` für Schlaf- und Aufstehzeiten.
 3. `supabase/add-meals-and-daily-context.sql` für Mahlzeiten, Tagesfaktoren und Tagesnotizen.
+4. `supabase/add-drink-vessels.sql` für die geräteübergreifende Synchronisation eigener Trinkgefäße mit Foto.
 
 Danach die App neu laden und unter **Einstellungen → Synchronisation → Jetzt synchronisieren** wählen. Schlafzeiten, Nachtzeit und alle bisherigen Einträge werden dann in Tagesansicht, Vergleich, Arztansicht und PDF nach derselben Messtag-Logik ausgewertet. Für ältere Tage ohne erfasste Schlafzeiten verwendet die App weiterhin die eingestellte Ersatz-Nachtzeit und ordnet frühmorgendliche Einträge dem vorherigen Messtag zu.
 

@@ -21,6 +21,7 @@
     presets: [],
     sleepEvents: [],
     dailyContexts: [],
+    vessels: [],
     defaultsMaterialized: false,
     nightStart: DEFAULT_NIGHT_START,
     nightEnd: DEFAULT_NIGHT_END,
@@ -30,6 +31,7 @@
   });
   let state = loadState();
   let entryKind = "drink";
+  let selectedDayKey = null;
   let currentView = "today";
   let supabaseClient = null;
   let currentUser = null;
@@ -41,6 +43,7 @@
   let nightSettingsSyncAvailable = null;
   let sleepEventsSyncAvailable = null;
   let extendedDiarySyncAvailable = null;
+  let vesselSyncAvailable = null;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -53,7 +56,8 @@
         ...saved,
         entries: (saved.entries || []).map(normalizeEntry),
         sleepEvents: saved.sleepEvents || [],
-        dailyContexts: saved.dailyContexts || []
+        dailyContexts: saved.dailyContexts || [],
+        vessels: saved.vessels || []
       };
       loaded.nightStart = normalizeTimeValue(loaded.nightStart, DEFAULT_NIGHT_START);
       loaded.nightEnd = normalizeTimeValue(loaded.nightEnd, DEFAULT_NIGHT_END);
@@ -263,6 +267,10 @@
 
   function activeDailyContexts() {
     return state.dailyContexts.filter((context) => !context.deleted_at);
+  }
+
+  function activeVessels() {
+    return state.vessels.filter((vessel) => !vessel.deleted_at);
   }
 
   function contextForDay(dayKey) {
@@ -580,6 +588,7 @@
 
   function setKind(kind) {
     entryKind = kind;
+    $("#capture-card").dataset.kind = kind;
     $$(".type-option").forEach((button) => {
       const selected = button.dataset.kind === kind;
       button.classList.toggle("active", selected);
@@ -589,6 +598,7 @@
     $("#meal-fields").hidden = kind !== "meal";
     $("#amount-row").hidden = kind === "meal";
     $("#urgency-wrap").hidden = kind !== "urination";
+    $("#vessel-picker-wrap").hidden = kind !== "drink" || activeVessels().length === 0;
     $("#amount").placeholder = kind === "drink" ? "250" : "300";
     $("#entry-form .primary-button[type='submit']").textContent = kind === "drink" ? "Getränk speichern" : (kind === "urination" ? "Toilettengang speichern" : "Mahlzeit speichern");
     if (kind !== "meal") renderQuickAmounts();
@@ -616,6 +626,80 @@
         </div>
       </div>`;
     }).join("");
+  }
+
+  function safeVesselImage(value) {
+    return /^data:image\/(?:jpeg|png|webp);base64,/i.test(String(value || "")) ? value : "";
+  }
+
+  function renderVessels() {
+    const vessels = activeVessels().sort((a, b) => a.name.localeCompare(b.name, "de"));
+    const picker = $("#vessel-picker");
+    $("#vessel-picker-wrap").hidden = entryKind !== "drink" || vessels.length === 0;
+    picker.innerHTML = vessels.map((vessel) => `
+      <button type="button" class="vessel-choice" data-vessel-id="${escapeHtml(vessel.id)}" aria-label="${escapeHtml(vessel.name)}, ${formatAmount(vessel.amount_ml)}">
+        <img src="${safeVesselImage(vessel.image_data)}" alt="" />
+        <strong>${escapeHtml(vessel.name)}</strong>
+        <span>${formatAmount(vessel.amount_ml)}</span>
+      </button>`).join("");
+    $("#vessel-list").innerHTML = vessels.length ? vessels.map((vessel) => `
+      <article class="vessel-card">
+        <img src="${safeVesselImage(vessel.image_data)}" alt="${escapeHtml(vessel.name)}" />
+        <div><strong>${escapeHtml(vessel.name)}</strong><span>${formatAmount(vessel.amount_ml)}</span></div>
+        <button type="button" data-delete-vessel="${escapeHtml(vessel.id)}" aria-label="${escapeHtml(vessel.name)} löschen">Löschen</button>
+      </article>`).join("") : '<div class="empty-state compact"><strong>Noch kein Trinkgefäß</strong>Foto aufnehmen, Füllmenge eintragen und künftig nur noch antippen.</div>';
+    if (!currentUser) {
+      $("#vessel-status").textContent = "Auf diesem Gerät gespeichert. Mit Supabase werden die Gefäße synchronisiert.";
+    } else if (vesselSyncAvailable === false) {
+      $("#vessel-status").textContent = "Datenbank-Update nötig, damit Trinkgefäße zwischen Geräten synchronisiert werden.";
+    } else {
+      $("#vessel-status").textContent = vesselSyncAvailable === null ? "Synchronisation wird geprüft …" : "Zwischen deinen Geräten synchronisiert.";
+    }
+  }
+
+  function selectVessel(id) {
+    const vessel = activeVessels().find((item) => item.id === id);
+    if (!vessel) return;
+    $("#amount").value = vessel.amount_ml;
+    $$(".vessel-choice").forEach((button) => button.classList.toggle("selected", button.dataset.vesselId === id));
+    updateQuickAmountSelection();
+    showToast(`${vessel.name}: ${formatAmount(vessel.amount_ml)} übernommen`);
+  }
+
+  function resizeVesselPhoto(file) {
+    if (!file?.type?.startsWith("image/")) return Promise.reject(new Error("Bitte eine Bilddatei auswählen."));
+    if (file.size > 12 * 1024 * 1024) return Promise.reject(new Error("Das Foto ist zu groß. Bitte ein Bild unter 12 MB wählen."));
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Das Foto konnte nicht gelesen werden."));
+      reader.onload = () => {
+        const image = new Image();
+        image.onerror = () => reject(new Error("Das Foto konnte nicht verarbeitet werden."));
+        image.onload = () => {
+          const maxSide = 640;
+          const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+          canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", .78));
+        };
+        image.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function deleteVessel(id) {
+    const vessel = state.vessels.find((item) => item.id === id && !item.deleted_at);
+    if (!vessel || !window.confirm(`${vessel.name} wirklich löschen?`)) return;
+    vessel.deleted_at = new Date().toISOString();
+    vessel.updated_at = vessel.deleted_at;
+    vessel.dirty = true;
+    saveState();
+    renderVessels();
+    void syncData();
+    showToast("Trinkgefäß gelöscht");
   }
 
   function resetPresetForm(focus = false) {
@@ -687,7 +771,7 @@
   }
 
   function renderDailyContext(dayKey = $("#daily-context-day").value || currentDiaryDayKey()) {
-    if (!$("#daily-context-day").value) $("#daily-context-day").value = dayKey;
+    $("#daily-context-day").value = dayKey;
     const context = contextForDay(dayKey);
     setCheckboxValues("daily-tags", context?.tags || []);
     $("#daily-note").value = context?.note || "";
@@ -723,14 +807,45 @@
     void syncData();
   }
 
+  function renderDayNavigator(dayKey) {
+    const date = dateFromKey(dayKey);
+    const current = currentDiaryDayKey();
+    const yesterday = shiftDayKey(current, -1);
+    const relative = dayKey === current ? "Heute" : (dayKey === yesterday ? "Gestern" : "Messtag");
+    const navigator = $("#day-navigator");
+    navigator.className = `day-navigator weekday-${date.getDay()}`;
+    $("#selected-day-relative").textContent = relative;
+    $("#selected-day-weekday").textContent = formatDate(date, { weekday: "long" });
+    $("#selected-day-date").textContent = formatDate(date, { day: "2-digit", month: "long", year: "numeric" });
+    $("#selected-day-date").dateTime = dayKey;
+    $("#next-day").disabled = dayKey >= current;
+    $("#return-today").hidden = dayKey === current;
+  }
+
+  function selectDiaryDay(dayKey, announce = false) {
+    const current = currentDiaryDayKey();
+    selectedDayKey = dayKey > current ? current : dayKey;
+    renderToday();
+    if (announce) showToast(selectedDayKey === current ? "Heute" : formatDate(dateFromKey(selectedDayKey), { weekday: "long", day: "2-digit", month: "long" }));
+  }
+
+  function moveDiaryDay(offset) {
+    selectDiaryDay(shiftDayKey(selectedDayKey || currentDiaryDayKey(), offset), true);
+  }
+
   function renderToday() {
-    const today = currentDiaryDayKey();
+    const today = selectedDayKey || currentDiaryDayKey();
+    selectedDayKey = today;
     const entries = entriesForDay(today).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
     const stats = statsFor(entries, today);
-    renderPhaseControl();
-    renderDailyContext();
-    $("#summary-heading").textContent = `Messtag ${formatDate(dateFromKey(today), { day: "2-digit", month: "2-digit" })}`;
+    const isCurrentDay = today === currentDiaryDayKey();
+    renderDayNavigator(today);
+    $("#capture-card").hidden = !isCurrentDay;
+    if (isCurrentDay) renderPhaseControl();
+    renderDailyContext(today);
+    $("#summary-heading").textContent = "Tagesübersicht";
     $("#metric-intake").textContent = formatAmount(stats.intake);
+    $("#metric-output").textContent = formatAmount(stats.output);
     $("#metric-after-20").textContent = formatAmount(stats.after20);
     $("#metric-before-sleep").textContent = formatAmount(stats.beforeSleep);
     $("#metric-day").textContent = formatAmount(stats.dayOutput);
@@ -1022,6 +1137,7 @@
   function renderAll() {
     renderQuickAmounts();
     renderEntrySuggestions();
+    renderVessels();
     renderToday();
     renderComparison();
     renderDoctor();
@@ -1029,6 +1145,7 @@
   }
 
   function navigate(target) {
+    if (target === "today") selectedDayKey = currentDiaryDayKey();
     currentView = target;
     $$(".view").forEach((view) => {
       const active = view.dataset.view === target;
@@ -1043,7 +1160,10 @@
     if (target === "compare") renderComparison();
     if (target === "doctor") renderDoctor();
     if (target === "settings") renderSettings();
-    if (target === "today") refreshCurrentEntryTime();
+    if (target === "today") {
+      refreshCurrentEntryTime();
+      renderToday();
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -1182,6 +1302,10 @@
     return { id: preset.id, user_id: currentUser.id, name: preset.name, amount_ml: preset.amount_ml, created_at: preset.created_at, updated_at: preset.updated_at, deleted_at: preset.deleted_at };
   }
 
+  function remoteVessel(vessel) {
+    return { id: vessel.id, user_id: currentUser.id, name: vessel.name, amount_ml: vessel.amount_ml, image_data: vessel.image_data, created_at: vessel.created_at, updated_at: vessel.updated_at, deleted_at: vessel.deleted_at };
+  }
+
   function remoteSleepEvent(event) {
     return {
       id: event.id,
@@ -1279,21 +1403,24 @@
     syncInProgress = true;
     setSyncStatus("syncing", "Synchronisiere …");
     try {
-      const [remoteEntries, remotePresets, settingsResult, sleepEventsResult, dailyContextsResult] = await Promise.all([
+      const [remoteEntries, remotePresets, settingsResult, sleepEventsResult, dailyContextsResult, vesselsResult] = await Promise.all([
         fetchAllRows("diary_entries"),
         fetchAllRows("drink_presets"),
         supabaseClient.from("user_settings").select("*").eq("user_id", currentUser.id).maybeSingle(),
         fetchOptionalRows("sleep_events"),
-        fetchOptionalRows("daily_contexts")
+        fetchOptionalRows("daily_contexts"),
+        fetchOptionalRows("drink_vessels")
       ]);
       if (settingsResult.error && !isMissingTable(settingsResult.error, "user_settings")) throw settingsResult.error;
       nightSettingsSyncAvailable = !settingsResult.error;
       sleepEventsSyncAvailable = !sleepEventsResult.error;
       extendedDiarySyncAvailable = !dailyContextsResult.error;
+      vesselSyncAvailable = !vesselsResult.error;
       state.entries = mergeRemote(state.entries, remoteEntries.map(normalizeEntry));
       state.presets = mergeRemote(state.presets, remotePresets);
       if (sleepEventsSyncAvailable) state.sleepEvents = mergeRemote(state.sleepEvents, sleepEventsResult.data);
       if (extendedDiarySyncAvailable) state.dailyContexts = mergeRemoteByKey(state.dailyContexts, dailyContextsResult.data.map((context) => ({ ...context, tags: Array.isArray(context.tags) ? context.tags : [] })), "day_key");
+      if (vesselSyncAvailable) state.vessels = mergeRemote(state.vessels, vesselsResult.data);
       if (nightSettingsSyncAvailable) mergeRemoteNightSettings(settingsResult.data);
 
       if (!state.defaultsMaterialized) {
@@ -1316,6 +1443,12 @@
         if (error) throw error;
         dirtyPresets.forEach((preset) => { preset.dirty = false; });
       }
+      const dirtyVessels = state.vessels.filter((vessel) => vessel.dirty);
+      if (vesselSyncAvailable && dirtyVessels.length) {
+        const { error } = await supabaseClient.from("drink_vessels").upsert(dirtyVessels.map(remoteVessel));
+        if (error) throw error;
+        dirtyVessels.forEach((vessel) => { vessel.dirty = false; });
+      }
       const dirtySleepEvents = state.sleepEvents.filter((event) => event.dirty);
       if (sleepEventsSyncAvailable && dirtySleepEvents.length) {
         const { error } = await supabaseClient.from("sleep_events").upsert(dirtySleepEvents.map(remoteSleepEvent));
@@ -1335,9 +1468,9 @@
       }
       saveState();
       renderAll();
-      if (nightSettingsSyncAvailable && sleepEventsSyncAvailable && extendedDiarySyncAvailable) {
+      if (nightSettingsSyncAvailable && sleepEventsSyncAvailable && extendedDiarySyncAvailable && vesselSyncAvailable) {
         setSyncStatus("online", "Synchronisiert");
-        $("#auth-message").textContent = "Einträge, Mahlzeiten, Tagesangaben, Getränke und Schlafzeiten sind synchronisiert.";
+        $("#auth-message").textContent = "Einträge, Mahlzeiten, Tagesangaben, Getränke, Trinkgefäße und Schlafzeiten sind synchronisiert.";
       } else {
         setSyncStatus("error", "Datenbank-Update nötig");
         $("#auth-message").textContent = "Die bisherigen Einträge bleiben synchronisiert. Für alle neuen Funktionen muss einmal das aktuelle Datenbank-Update ausgeführt werden.";
@@ -1434,7 +1567,28 @@
       $("#amount").value = button.dataset.amount;
       updateQuickAmountSelection();
     });
-    $("#amount").addEventListener("input", updateQuickAmountSelection);
+    $("#amount").addEventListener("input", () => {
+      updateQuickAmountSelection();
+      $$(".vessel-choice").forEach((button) => button.classList.remove("selected"));
+    });
+    $("#previous-day").addEventListener("click", () => moveDiaryDay(-1));
+    $("#next-day").addEventListener("click", () => moveDiaryDay(1));
+    $("#return-today").addEventListener("click", () => selectDiaryDay(currentDiaryDayKey(), true));
+    let swipeStart = null;
+    $("#view-today").addEventListener("touchstart", (event) => {
+      const touch = event.changedTouches[0];
+      swipeStart = { x: touch.clientX, y: touch.clientY };
+    }, { passive: true });
+    $("#view-today").addEventListener("touchend", (event) => {
+      if (!swipeStart) return;
+      const touch = event.changedTouches[0];
+      const dx = touch.clientX - swipeStart.x;
+      const dy = touch.clientY - swipeStart.y;
+      swipeStart = null;
+      if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.25) return;
+      if (dx > 0) moveDiaryDay(-1);
+      else if ((selectedDayKey || currentDiaryDayKey()) < currentDiaryDayKey()) moveDiaryDay(1);
+    }, { passive: true });
     $("#entry-suggestion").addEventListener("change", (event) => {
       if (event.target.value === "") return;
       applyEntrySuggestion(event.target.value);
@@ -1446,6 +1600,14 @@
       }
     });
     $("#manage-drinks-button").addEventListener("click", () => openDrinkManagement(false));
+    $("#manage-vessels-button").addEventListener("click", () => {
+      navigate("settings");
+      $("#vessel-settings-card").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    $("#vessel-picker").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-vessel-id]");
+      if (button) selectVessel(button.dataset.vesselId);
+    });
     ["#occurred-date", "#occurred-time"].forEach((selector) => $(selector).addEventListener("input", () => {
       occurredAtManuallySet = true;
       $("#use-current-time").hidden = false;
@@ -1522,7 +1684,7 @@
       saveDailyContext($("#daily-context-day").value || currentDiaryDayKey(), selectedCheckboxValues("daily-tags"), $("#daily-note").value);
       showToast("Tagesangaben gespeichert");
     });
-    $("#daily-context-day").addEventListener("change", () => renderDailyContext($("#daily-context-day").value));
+    $("#daily-context-day").addEventListener("change", () => selectDiaryDay($("#daily-context-day").value));
     $("#delete-entry-button").addEventListener("click", () => {
       if (!window.confirm("Diesen Eintrag wirklich löschen?")) return;
       deleteEntry($("#edit-id").value);
@@ -1605,6 +1767,44 @@
       if (deleteButton) deletePreset(deleteButton.dataset.deletePreset);
     });
     $("#preset-cancel-button").addEventListener("click", () => resetPresetForm());
+    $("#vessel-photo").addEventListener("change", async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try {
+        const imageData = await resizeVesselPhoto(file);
+        $("#vessel-preview").src = imageData;
+        $("#vessel-preview").hidden = false;
+      } catch (error) {
+        event.target.value = "";
+        $("#vessel-preview").hidden = true;
+        showToast(error.message);
+      }
+    });
+    $("#vessel-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const name = $("#vessel-name").value.trim();
+      const amount = Number($("#vessel-amount").value);
+      const file = $("#vessel-photo").files?.[0];
+      if (!name || !Number.isFinite(amount) || amount < 10 || amount > 5000 || !file) {
+        showToast("Bitte Name, Füllmenge und Foto vollständig angeben.");
+        return;
+      }
+      try {
+        const imageData = await resizeVesselPhoto(file);
+        const now = new Date().toISOString();
+        state.vessels.push({ id: uuid(), name: name.slice(0, 40), amount_ml: Math.round(amount), image_data: imageData, created_at: now, updated_at: now, deleted_at: null, dirty: true });
+        saveState();
+        $("#vessel-form").reset();
+        $("#vessel-preview").hidden = true;
+        renderAll();
+        void syncData();
+        showToast("Trinkgefäß gespeichert");
+      } catch (error) { showToast(error.message); }
+    });
+    $("#vessel-list").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-delete-vessel]");
+      if (button) deleteVessel(button.dataset.deleteVessel);
+    });
     $("#auth-signed-out").addEventListener("submit", (event) => { event.preventDefault(); void signIn(false); });
     $("#sign-up-button").addEventListener("click", () => void signIn(true));
     $("#sync-now-button").addEventListener("click", () => void syncData());
