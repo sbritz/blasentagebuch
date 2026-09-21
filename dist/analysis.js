@@ -127,8 +127,10 @@
   }
 
   function compareTaggedDays(days, collectionKey, tag, outcomeKey) {
-    const withTag = days.filter((day) => (day[collectionKey] || []).includes(tag)).map((day) => day[outcomeKey]).filter(Number.isFinite);
-    const withoutTag = days.filter((day) => !(day[collectionKey] || []).includes(tag)).map((day) => day[outcomeKey]).filter(Number.isFinite);
+    const withDays = days.filter((day) => (day[collectionKey] || []).includes(tag) && Number.isFinite(day[outcomeKey]));
+    const withoutDays = days.filter((day) => !(day[collectionKey] || []).includes(tag) && Number.isFinite(day[outcomeKey]));
+    const withTag = withDays.map((day) => day[outcomeKey]);
+    const withoutTag = withoutDays.map((day) => day[outcomeKey]);
     const withMean = mean(withTag);
     const withoutMean = mean(withoutTag);
     return {
@@ -136,6 +138,8 @@
       outcomeKey,
       withCount: withTag.length,
       withoutCount: withoutTag.length,
+      withDayKeys: withDays.map((day) => day.dayKey).filter(Boolean),
+      withoutDayKeys: withoutDays.map((day) => day.dayKey).filter(Boolean),
       withMean,
       withMedian: median(withTag),
       withoutMean,
@@ -156,6 +160,8 @@
       splitValue,
       lowerCount: lower.length,
       higherCount: higher.length,
+      lowerDayKeys: lower.map((day) => day.dayKey).filter(Boolean),
+      higherDayKeys: higher.map((day) => day.dayKey).filter(Boolean),
       lowerXMean: mean(lower.map((day) => day[xKey])),
       higherXMean: mean(higher.map((day) => day[xKey])),
       lowerYMean: mean(lower.map((day) => day[yKey])),
@@ -183,7 +189,7 @@
 
     const addTagged = (kind, collectionKey, tags) => tags.forEach((tag) => {
       const comparison = compareTaggedDays(days, collectionKey, tag, "nightUrineMl");
-      if (comparison.withCount < 2 || comparison.withoutCount < 2 || !Number.isFinite(comparison.absoluteDifference) || comparison.absoluteDifference === 0) return;
+      if (comparison.withCount < 3 || comparison.withoutCount < 2 || !Number.isFinite(comparison.absoluteDifference) || comparison.absoluteDifference === 0) return;
       const scale = Math.max(1, Math.abs(comparison.withoutMean));
       candidates.push({ id: `${kind}-${tag}`, kind, tag, comparison, score: Math.abs(comparison.absoluteDifference) / scale, order: order++ });
     });

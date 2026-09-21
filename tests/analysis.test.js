@@ -89,3 +89,23 @@ test("Arztbericht wählt höchstens fünf ausreichend belegte Muster determinist
     maxPatterns: 5
   }));
 });
+
+test("Merkmalsvergleich erscheint erst ab drei Tagen mit diesem Merkmal", () => {
+  const days = Array.from({ length: 6 }, (_, index) => ({
+    dayKey: `2026-09-${String(index + 1).padStart(2, "0")}`,
+    beforeSleep3hMl: 300,
+    nightUrineMl: index < 2 ? 900 : 600,
+    nightVisits: 2,
+    intakeMl: 1800,
+    totalUrineMl: 1600,
+    mealTags: index < 2 ? ["salty"] : [],
+    dailyFactors: []
+  }));
+  const result = analysis.observedPatterns(days, { mealTags: ["salty"], dailyFactors: [], maxPatterns: 5 });
+  assert.equal(result.some((pattern) => pattern.kind === "mealTag" && pattern.tag === "salty"), false);
+
+  days[2].mealTags = ["salty"];
+  days[2].nightUrineMl = 900;
+  const thresholdResult = analysis.observedPatterns(days, { mealTags: ["salty"], dailyFactors: [], maxPatterns: 5 });
+  assert.equal(thresholdResult.some((pattern) => pattern.kind === "mealTag" && pattern.tag === "salty"), true);
+});

@@ -20,9 +20,9 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 - Tages-/Nachtmengen, Nachtanteil, Tag-/Nachtgänge, Durchschnitt und maximale Einzelentleerung
 - Auswertung der Flüssigkeitsmenge in den letzten drei Stunden vor dem Schlafengehen
 - Harndrang-Auswertung nach Stufe mit Anzahl und Durchschnittsmenge
-- deterministische Musteranalyse ohne externe KI/API: Mittelwert, Median, Differenzen und Pearson-Korrelationen für vollständige Messtage
+- verständliche deterministische Musteranalyse ohne externe KI/API: maximal fünf Karten; technische Werte wie Mittelwert, Median, Differenzen und Pearson-Korrelationen nur in aufklappbaren Details
 - Vergleich von spätem Trinken, Trink-/Urin-Gesamtmengen, Mahlzeiten-Merkmalen und Tagesfaktoren mit Nachturin und Nachtgängen
-- kompakter Arztbericht mit maximal fünf datenbasierten „Beobachteten Mustern“, Vergleichswerten, Fallzahlen, Zeitraum und ausdrücklicher Nicht-Kausalitäts-/Nicht-Diagnose-Kennzeichnung
+- kompakter Arztbericht mit maximal fünf datenbasierten Hinweisen, klarer Datenbasis, Mindestzahl von drei Merkmal-Tagen und ausdrücklicher Nicht-Kausalitäts-/Nicht-Diagnose-Kennzeichnung
 - berechnete Zeitabstände zwischen Schlaf und letzter Mahlzeit beziehungsweise letzter einzelner Getränkeaufnahme ab 300 ml
 - Tagesfaktoren und freie Tagesnotiz, geräteübergreifend synchronisiert
 - geräteübergreifend synchronisierte Schlaf-/Aufstehzeiten und Ersatz-Nachtzeit mit rückwirkender Neuberechnung aller Einträge
