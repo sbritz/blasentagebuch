@@ -15,6 +15,21 @@ test("Pearson-Korrelation erkennt lineare Zusammenhänge und zu kleine Stichprob
   assert.equal(analysis.pearson([[1, 2], [2, 4]]), null);
 });
 
+test("fehlende Schlafereignisse laufen an der nächsten Standard-Phasengrenze aus", () => {
+  const wake = { kind: "wake_up", occurred_at: "2026-09-23T08:00:00+02:00" };
+  const fallbackSleep = analysis.phaseEventExpiryTimestamp(wake, null, "23:30", "07:30");
+  assert.equal(new Date(fallbackSleep).toISOString(), "2026-09-23T21:30:00.000Z");
+
+  const sleep = { kind: "sleep_start", occurred_at: "2026-09-23T22:15:00+02:00" };
+  const recordedWake = { kind: "wake_up", occurred_at: "2026-09-24T08:00:00+02:00" };
+  const recordedWakeBoundary = analysis.phaseEventExpiryTimestamp(sleep, recordedWake, "23:30", "07:30");
+  assert.equal(new Date(recordedWakeBoundary).toISOString(), "2026-09-24T06:00:00.000Z");
+
+  const staleFutureSleep = { kind: "sleep_start", occurred_at: "2026-09-24T23:30:00+02:00" };
+  const staleWakeBoundary = analysis.phaseEventExpiryTimestamp(wake, staleFutureSleep, "23:30", "07:30");
+  assert.equal(new Date(staleWakeBoundary).toISOString(), "2026-09-23T21:30:00.000Z");
+});
+
 test("Tageswerte werden ausschließlich aus Roh-Einträgen berechnet", () => {
   const entries = [
     { kind: "drink", amount_ml: 250, occurred_at: "2026-09-19T18:00:00Z" },

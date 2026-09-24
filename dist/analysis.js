@@ -7,6 +7,7 @@
 
   const URGENCY_LEVELS = ["leicht", "mittel", "stark"];
   const DEFAULT_LARGE_DRINK_ML = 300;
+  const MAX_RECORDED_PHASE_HOURS = 20;
 
   function finiteValues(values) {
     return values.map(Number).filter(Number.isFinite);
@@ -48,6 +49,31 @@
   function timestamp(value) {
     const result = new Date(value).getTime();
     return Number.isFinite(result) ? result : null;
+  }
+
+  function nextClockBoundaryTimestamp(value, clockTime) {
+    const reference = new Date(value);
+    const match = String(clockTime || "").match(/^(\d{2}):(\d{2})$/);
+    if (Number.isNaN(reference.getTime()) || !match) return null;
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (hour > 23 || minute > 59) return null;
+    const boundary = new Date(reference);
+    boundary.setHours(hour, minute, 0, 0);
+    if (boundary.getTime() <= reference.getTime()) boundary.setDate(boundary.getDate() + 1);
+    return boundary.getTime();
+  }
+
+  function phaseEventExpiryTimestamp(event, nextEvent, nightStart, nightEnd) {
+    const eventTime = timestamp(event?.occurred_at);
+    if (eventTime === null) return null;
+    const defaultBoundary = nextClockBoundaryTimestamp(eventTime, event.kind === "sleep_start" ? nightEnd : nightStart);
+    const nextTime = timestamp(nextEvent?.occurred_at);
+    const isOppositeTransition = (event.kind === "sleep_start" && nextEvent?.kind === "wake_up")
+      || (event.kind === "wake_up" && nextEvent?.kind === "sleep_start");
+    const maximumRecordedPhase = MAX_RECORDED_PHASE_HOURS * 60 * 60 * 1000;
+    if (isOppositeTransition && nextTime > eventTime && nextTime - eventTime <= maximumRecordedPhase) return nextTime;
+    return defaultBoundary;
   }
 
   function minutesBefore(eventTime, referenceTime) {
@@ -224,11 +250,14 @@
 
   return {
     DEFAULT_LARGE_DRINK_ML,
+    MAX_RECORDED_PHASE_HOURS,
     URGENCY_LEVELS,
     mean,
     median,
     percentageDifference,
     pearson,
+    nextClockBoundaryTimestamp,
+    phaseEventExpiryTimestamp,
     minutesBefore,
     computeDayMetrics,
     summarizeContinuous,

@@ -460,6 +460,14 @@
     };
   }
 
+  function phaseEventApplies(event, events, timestamp) {
+    if (!event || !Analysis?.phaseEventExpiryTimestamp) return false;
+    const eventTime = new Date(event.occurred_at).getTime();
+    const nextEvent = events.find((candidate) => new Date(candidate.occurred_at).getTime() > eventTime);
+    const expiresAt = Analysis.phaseEventExpiryTimestamp(event, nextEvent, state.nightStart, state.nightEnd);
+    return Number.isFinite(expiresAt) && timestamp < expiresAt;
+  }
+
   function classifyEntry(entry) {
     const occurredAt = new Date(entry.occurred_at);
     const timestamp = occurredAt.getTime();
@@ -472,6 +480,7 @@
       }
       return fallbackClassification(occurredAt);
     }
+    if (!phaseEventApplies(latestEvent, events, timestamp)) return fallbackClassification(occurredAt);
 
     const latestEventTime = new Date(latestEvent.occurred_at).getTime();
     const earlierWakes = events.filter((event) => event.kind === "wake_up" && new Date(event.occurred_at).getTime() < latestEventTime);
@@ -511,9 +520,12 @@
 
   function currentPhaseStatus(date = new Date()) {
     const timestamp = date.getTime();
-    const events = activeSleepEvents().filter((event) => new Date(event.occurred_at).getTime() <= timestamp);
-    const latestEvent = events.at(-1);
+    const allEvents = activeSleepEvents();
+    const latestEvent = allEvents.filter((event) => new Date(event.occurred_at).getTime() <= timestamp).at(-1);
     if (!latestEvent) {
+      return { phase: clockNightInfo(date).night ? "night" : "day", pendingMorningVoid: false, source: "fallback", since: null };
+    }
+    if (!phaseEventApplies(latestEvent, allEvents, timestamp)) {
       return { phase: clockNightInfo(date).night ? "night" : "day", pendingMorningVoid: false, source: "fallback", since: null };
     }
     if (latestEvent.kind === "sleep_start") return { phase: "night", pendingMorningVoid: false, source: "event", since: latestEvent.occurred_at };

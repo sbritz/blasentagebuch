@@ -26,6 +26,7 @@ Eine mobile-first Progressive Web App in Vanilla HTML, CSS und JavaScript. Eintr
 - berechnete Zeitabstände zwischen Schlaf und letzter Mahlzeit beziehungsweise letzter einzelner Getränkeaufnahme ab 300 ml
 - Tagesfaktoren und freie Tagesnotiz, geräteübergreifend synchronisiert
 - geräteübergreifend synchronisierte Schlaf-/Aufstehzeiten und Ersatz-Nachtzeit mit rückwirkender Neuberechnung aller Einträge
+- automatischer Rückfall auf die gespeicherten Ersatz-Nachtzeiten, wenn ein Schlaf- oder Aufsteh-Button vergessen wurde
 - Vergleich für 7, 14 oder 30 Tage
 - Bearbeiten und Löschen mit synchronisierten Löschmarkierungen
 - druckoptimierte Arztansicht für einen frei wählbaren Zeitraum
